@@ -1,0 +1,62 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mini-omega-lock"
+version = "0.1.0"
+description = "Empirical preflight probes for omegaprompt calibration: judge consistency, endpoint schema reliability, context-budget margin, latency, noise floor. Emits PreflightReport records the omegaprompt pipeline consumes via derive_adaptation_plan."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [
+    { name = "hibou04-ops" },
+]
+keywords = [
+    "prompt-calibration",
+    "preflight",
+    "llm-judge",
+    "omegaprompt",
+    "omega-lock",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "omegaprompt>=1.1.0",
+    "pydantic>=2.6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/hibou04-ops/mini-omega-lock"
+Repository = "https://github.com/hibou04-ops/mini-omega-lock"
+"Parent package" = "https://github.com/hibou04-ops/omegaprompt"
+Issues = "https://github.com/hibou04-ops/mini-omega-lock/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mini_omega_lock"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/mini_omega_lock",
+    "README.md",
+    "LICENSE",
+    "pyproject.toml",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-ra -q"

@@ -85,3 +85,5 @@ All adapter tests mock the provider SDK; no network, no API credits, fully offli
 ## License
 
 Apache 2.0. See [LICENSE](LICENSE).
+
+**License history.** PyPI distributions of version 0.1.0 were shipped with an MIT `LICENSE` file. The repository was relicensed to Apache 2.0 on 2026-04-22 (commit `ff489a97ee9a029a474f9144ae880de7b20f40ca`); 0.2.0 (2026-04-28) and all later versions ship under Apache 2.0. Anyone who installed 0.1.0 holds an MIT license to that copy — license changes do not apply retroactively.

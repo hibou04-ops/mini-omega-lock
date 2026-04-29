@@ -53,6 +53,9 @@ include = [
     "src/mini_omega_lock",
     "README.md",
     "LICENSE",
+    "NOTICE",
+    "AUTHORS.md",
+    "PRE_EXISTING_IP.md",
     "pyproject.toml",
 ]
 

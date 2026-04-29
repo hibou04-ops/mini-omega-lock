@@ -2,7 +2,7 @@
 
 > **For**: Kyunghoon Gwak (곽경훈) — Primary Author, [@hibou04-ops](https://github.com/hibou04-ops)
 > **Purpose**: Action items the IP-defense package depends on but cannot self-execute. Read this when (a) you receive an employment offer, (b) you set up a GPG key, or (c) you need to verify the snapshot.
-> **Created**: 2026-04-29
+> **Created**: 2026-04-29 (consolidated cross-repo list across all six packages)
 
 ---
 
@@ -38,6 +38,7 @@
 **첨부할 내용** (PDF 출력 권장):
 
 1. 각 repo의 PRE_EXISTING_IP.md PDF print:
+   - omegaprompt: https://github.com/hibou04-ops/omegaprompt/blob/main/PRE_EXISTING_IP.md
    - omega-lock: https://github.com/hibou04-ops/omega-lock/blob/main/PRE_EXISTING_IP.md
    - Antemortem: https://github.com/hibou04-ops/Antemortem/blob/main/PRE_EXISTING_IP.md
    - antemortem-cli: https://github.com/hibou04-ops/antemortem-cli/blob/main/PRE_EXISTING_IP.md
@@ -45,6 +46,7 @@
    - mini-antemortem-cli: https://github.com/hibou04-ops/mini-antemortem-cli/blob/main/PRE_EXISTING_IP.md
 
 2. 각 repo의 pre-employment 스냅샷 tag URL (immutable witness):
+   - https://github.com/hibou04-ops/omegaprompt/releases/tag/pre-employment-ip-snapshot-2026-04-29
    - https://github.com/hibou04-ops/omega-lock/releases/tag/pre-employment-ip-snapshot-2026-04-28
    - https://github.com/hibou04-ops/Antemortem/releases/tag/pre-employment-ip-snapshot-2026-04-28
    - https://github.com/hibou04-ops/antemortem-cli/releases/tag/pre-employment-ip-snapshot-2026-04-28
@@ -52,7 +54,7 @@
    - https://github.com/hibou04-ops/mini-antemortem-cli/releases/tag/pre-employment-ip-snapshot-2026-04-29
 
 3. 계약서에 추가 요청할 표현 (한국어 샘플):
-   > 「본 계약 체결일 이전에 작성된 별첨 1의 발명·저작물(omega-lock, Antemortem, antemortem-cli, mini-omega-lock, mini-antemortem-cli — 각 GitHub URL 및 pre-employment-ip-snapshot tag 참조)은 피용자의 기존 지식재산권으로 인정되며, 본 계약의 직무발명·업무상 저작물 양도 조항의 적용 대상에서 제외된다.」
+   > 「본 계약 체결일 이전에 작성된 별첨 1의 발명·저작물(omegaprompt, omega-lock, Antemortem, antemortem-cli, mini-omega-lock, mini-antemortem-cli — 각 GitHub URL 및 pre-employment-ip-snapshot tag 참조)은 피용자의 기존 지식재산권으로 인정되며, 본 계약의 직무발명·업무상 저작물 양도 조항의 적용 대상에서 제외된다.」
 
 ### Step 3. 계약 후 작업 분리 원칙 유지
 
@@ -80,8 +82,8 @@ gpg --list-secret-keys --keyid-format LONG
 git config --local user.signingkey <YOUR_KEY_ID>
 git config --local commit.gpgsign true
 
-# 2. 각 repo에서 tag 재서명 (예: mini-omega-lock)
-cd C:/Users/hibou/mini-omega-lock
+# 2. 각 repo에서 tag 재서명 (예: omegaprompt)
+cd C:/Users/hibou/omegaprompt
 git tag -d pre-employment-ip-snapshot-2026-04-29
 git tag -s pre-employment-ip-snapshot-2026-04-29 \
   -m "Pre-existing IP snapshot for Schedule A. Author: Kyunghoon Gwak (곽경훈) <hibouaile04@gmail.com>."
@@ -91,6 +93,7 @@ git push origin pre-employment-ip-snapshot-2026-04-29 --force
 # C:/Users/hibou/omega-lock              → pre-employment-ip-snapshot-2026-04-28
 # C:/Users/hibou/Antemortem              → pre-employment-ip-snapshot-2026-04-28
 # C:/Users/hibou/antemortem-cli          → pre-employment-ip-snapshot-2026-04-28
+# C:/Users/hibou/mini-omega-lock         → pre-employment-ip-snapshot-2026-04-29
 # C:/Users/hibou/mini-antemortem-cli     → pre-employment-ip-snapshot-2026-04-29
 ```
 
@@ -102,6 +105,7 @@ git push origin pre-employment-ip-snapshot-2026-04-29 --force
 
 ```bash
 # 각 repo에서 (snapshot 날짜는 repo별로 다름):
+git -C C:/Users/hibou/omegaprompt             show pre-employment-ip-snapshot-2026-04-29 | head -20
 git -C C:/Users/hibou/omega-lock              show pre-employment-ip-snapshot-2026-04-28 | head -20
 git -C C:/Users/hibou/Antemortem              show pre-employment-ip-snapshot-2026-04-28 | head -20
 git -C C:/Users/hibou/antemortem-cli          show pre-employment-ip-snapshot-2026-04-28 | head -20
@@ -109,6 +113,7 @@ git -C C:/Users/hibou/mini-omega-lock         show pre-employment-ip-snapshot-20
 git -C C:/Users/hibou/mini-antemortem-cli     show pre-employment-ip-snapshot-2026-04-29 | head -20
 
 # GitHub remote tag 검증 (gh CLI 필요):
+gh api repos/hibou04-ops/omegaprompt/git/refs/tags/pre-employment-ip-snapshot-2026-04-29
 gh api repos/hibou04-ops/omega-lock/git/refs/tags/pre-employment-ip-snapshot-2026-04-28
 gh api repos/hibou04-ops/Antemortem/git/refs/tags/pre-employment-ip-snapshot-2026-04-28
 gh api repos/hibou04-ops/antemortem-cli/git/refs/tags/pre-employment-ip-snapshot-2026-04-28
@@ -122,7 +127,7 @@ gh api repos/hibou04-ops/mini-antemortem-cli/git/refs/tags/pre-employment-ip-sna
 
 ## 📝 이 체크리스트 자체의 갱신
 
-- 새로운 repo 추가 시 → 위 5개 repo URL 목록 갱신
+- 새로운 repo 추가 시 → 위 6개 repo URL 목록 갱신
 - 본명·이메일·핸들 변경 시 → AUTHORS.md, PRE_EXISTING_IP.md, NOTICE 모두 갱신
 - 입사 또는 큰 계약 체결 시 → 본 체크리스트의 Step 1~3 완료 여부 기록
 - 다른 repo로 IP 자산 확장 시 → 동일 패턴 (AUTHORS + PRE_EXISTING_IP + NOTICE + IP_DEFENSE_CHECKLIST) 복사

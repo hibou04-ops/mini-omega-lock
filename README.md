@@ -5,13 +5,17 @@
 [![PyPI](https://img.shields.io/badge/pypi-0.3.0-blue.svg)](https://pypi.org/project/mini-omega-lock/)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org)
-[![Parent](https://img.shields.io/badge/parent-omegaprompt%E2%89%A51.1.0-blueviolet.svg)](https://pypi.org/project/omegaprompt/)
+[![Parent](https://img.shields.io/badge/parent-omegaprompt%E2%89%A51.4.0-blueviolet.svg)](https://pypi.org/project/omegaprompt/)
+
+> **Part of the omegaprompt toolkit** — [omegaprompt](https://github.com/hibou04-ops/omegaprompt) (calibration engine) · [omega-lock](https://github.com/hibou04-ops/omega-lock) (audit framework) · [antemortem-cli](https://github.com/hibou04-ops/antemortem-cli) (pre-implementation recon CLI) · [mini-omega-lock](https://github.com/hibou04-ops/mini-omega-lock) (empirical preflight, this repo) · [mini-antemortem-cli](https://github.com/hibou04-ops/mini-antemortem-cli) (analytical preflight) · [Antemortem](https://github.com/hibou04-ops/Antemortem) (methodology). Cross-toolkit cookbook: [AGENT_TRIGGERS.md](https://github.com/hibou04-ops/omegaprompt/blob/main/AGENT_TRIGGERS.md).
 
 > **Empirical preflight probes for [omegaprompt](https://pypi.org/project/omegaprompt/) calibration.** Measures the actual environment (judge consistency, endpoint schema reliability, context-budget margin, latency, noise floor) and emits `PreflightReport` records that feed `omegaprompt`'s `derive_adaptation_plan`.
 
 ```bash
 pip install mini-omega-lock
 ```
+
+**MCP server.** This package also exposes its five probes (`empirical_preflight`, `measure_judge_consistency`, `compute_context_margin`, `noise_floor_estimate`, `project_performance`) as agent-callable MCP tools. Run `pip install "mini-omega-lock[mcp]"` then `python -m mini_omega_lock.mcp` (stdio, default for Claude Code). See [AGENT_TRIGGERS.md scenario 2](https://github.com/hibou04-ops/omegaprompt/blob/main/AGENT_TRIGGERS.md#scenario-2--pre-calibration-sanity-check) for when an agent should fire these.
 
 ## Why this is separate from omegaprompt
 

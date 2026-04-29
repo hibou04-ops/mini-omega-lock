@@ -4,11 +4,11 @@ This project was conceived, designed, and authored by:
 
 **Primary Author**: Kyunghoon Gwak (곽경훈) *(see [PRE_EXISTING_IP.md](PRE_EXISTING_IP.md) for full IP binding)*
 **GitHub Handle**: [@hibou04-ops](https://github.com/hibou04-ops)
-**Primary Contact Email**: hibouaile04@gmail.com
-**Git Author Email** (historical, on commits prior to 2026-04-28): hibou04@gmail.com
+**Primary Email**: `hibouaile04@gmail.com` — Primary, Verified, Connected to Google on the GitHub account. **The Primary Author's only verified personal email.**
 
-Both email addresses are verified personal accounts of the Primary Author.
-The GitHub handle [@hibou04-ops](https://github.com/hibou04-ops) is operated by the Primary Author.
+> **Note on commit-author email misconfiguration.** Some commits in the git history before 2026-04-29 carry `hibou04@gmail.com` in the *email* field of the author. This was an unintended local git client misconfiguration on the Primary Author's machine; `hibou04@gmail.com` is **not** an email account belonging to the Primary Author. That address was added to the Primary Author's GitHub account by mistake at some point, was never verified, and was removed on 2026-04-29. The author *name* on every commit is `Hibou04-ops`, the Primary Author's GitHub handle, which is the unambiguous identifier across the repository's history. From 2026-04-29 onwards every repository in this toolkit has its local git configuration set to `hibouaile04@gmail.com`, so all subsequent commits carry the verified primary email. All work in this repository is the Primary Author's regardless of the email value recorded in any specific commit.
+
+The GitHub handle [@hibou04-ops](https://github.com/hibou04-ops) is operated by the Primary Author throughout.
 
 ## Authorship Scope
 

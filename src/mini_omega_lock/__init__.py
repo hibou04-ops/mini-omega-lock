@@ -35,7 +35,7 @@ from mini_omega_lock.probes import (
     project_performance,
 )
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
     "compute_context_margin",

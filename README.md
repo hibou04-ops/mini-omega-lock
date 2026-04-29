@@ -1,6 +1,6 @@
 # mini-omega-lock
 
-> **New to this?** Start here: [EASY_README.md](EASY_README.md) (English) · [EASY_README_KR.md](EASY_README_KR.md) (한국어). Compressed plain-language introductions for readers who find the full doc below intimidating.
+> **Empirical preflight probes for [omegaprompt](https://pypi.org/project/omegaprompt/) calibration.** Measures judge consistency, endpoint schema reliability, context-budget margin, latency, and noise floor — emits `PreflightReport` records that omegaprompt's `derive_adaptation_plan` consumes.
 
 [![PyPI](https://img.shields.io/badge/pypi-0.3.0-blue.svg)](https://pypi.org/project/mini-omega-lock/)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
@@ -9,13 +9,57 @@
 
 > **Part of the omegaprompt toolkit** — [omegaprompt](https://github.com/hibou04-ops/omegaprompt) (calibration engine) · [omega-lock](https://github.com/hibou04-ops/omega-lock) (audit framework) · [antemortem-cli](https://github.com/hibou04-ops/antemortem-cli) (pre-implementation recon CLI) · [mini-omega-lock](https://github.com/hibou04-ops/mini-omega-lock) (empirical preflight, this repo) · [mini-antemortem-cli](https://github.com/hibou04-ops/mini-antemortem-cli) (analytical preflight) · [Antemortem](https://github.com/hibou04-ops/Antemortem) (methodology). Cross-toolkit cookbook: [AGENT_TRIGGERS.md](https://github.com/hibou04-ops/omegaprompt/blob/main/AGENT_TRIGGERS.md).
 
-> **Empirical preflight probes for [omegaprompt](https://pypi.org/project/omegaprompt/) calibration.** Measures the actual environment (judge consistency, endpoint schema reliability, context-budget margin, latency, noise floor) and emits `PreflightReport` records that feed `omegaprompt`'s `derive_adaptation_plan`.
-
 ```bash
-pip install mini-omega-lock
+pip install omegaprompt mini-omega-lock
 ```
 
-**MCP server.** This package also exposes its five probes (`empirical_preflight`, `measure_judge_consistency`, `compute_context_margin`, `noise_floor_estimate`, `project_performance`) as agent-callable MCP tools. Run `pip install "mini-omega-lock[mcp]"` then `python -m mini_omega_lock.mcp` (stdio, default for Claude Code). See [AGENT_TRIGGERS.md scenario 2](https://github.com/hibou04-ops/omegaprompt/blob/main/AGENT_TRIGGERS.md#scenario-2--pre-calibration-sanity-check) for when an agent should fire these.
+**MCP server.** This package also exposes its five probes (`empirical_preflight`, `measure_judge_consistency`, `compute_context_margin`, `noise_floor_estimate`, `project_performance`) as agent-callable MCP tools. Run `pip install "mini-omega-lock[mcp]"` then `python -m mini_omega_lock.mcp` (stdio, default for Claude Code). See [AGENT_TRIGGERS.md scenario 2](https://github.com/hibou04-ops/omegaprompt/blob/main/AGENT_TRIGGERS.md#scenario-2--pre-calibration-sanity-check).
+
+---
+
+## TL;DR
+
+`omegaprompt` ships a **plugin interface** for preflight probes (`omegaprompt.preflight.contracts` + `omegaprompt.preflight.adaptation`) but no probe implementation. This package fills that gap with five empirical measurements, then hands the result to omegaprompt's adaptation layer:
+
+- **Judge consistency** — same (response, rubric) scored N times → `1 - CV`. Low = noisy judge, need `rescore_count > 1`.
+- **Schema reliability** — STRICT_SCHEMA probe success rate. < 0.9 triggers `JSON_OBJECT` fallback automatically.
+- **Context budget margin** — `1 - (longest_call_tokens / context_window)`. Negative = guaranteed overflow.
+- **Performance projection** — probe latency × calibration scale → wall-time estimate before launching.
+- **Noise floor** — fitness stdev under identical params → adaptive `min_kc4` threshold.
+
+One call (`empirical_preflight()`) returns the three records `omegaprompt`'s `derive_adaptation_plan()` consumes.
+
+> **Looking for the analytical (no-API, deterministic) preflight?** See sibling tool [`mini-antemortem-cli`](https://pypi.org/project/mini-antemortem-cli/) — same plugin interface, deterministic rule-based classifier instead of LLM probes.
+
+---
+
+## Quick start (3-minute)
+
+```python
+from omegaprompt import make_provider, PreflightReport, derive_adaptation_plan
+from omegaprompt.domain.dataset import DatasetItem
+from omegaprompt.domain.judge import Dimension, JudgeRubric
+from omegaprompt.judges.llm_judge import LLMJudge
+from mini_omega_lock import empirical_preflight
+
+judge_provider = make_provider("anthropic")
+judge = LLMJudge(provider=judge_provider)
+rubric = JudgeRubric(dimensions=[Dimension(name="accuracy", description="x", weight=1.0)])
+probe_item = DatasetItem(id="probe", input="2+2", reference="4")
+
+# One call → five measurements → adaptation plan
+judge_quality, endpoint, performance = empirical_preflight(
+    judge=judge, rubric=rubric, probe_item=probe_item, n_consistency_runs=3,
+)
+
+report = PreflightReport(judge_quality=judge_quality, endpoint=endpoint, performance=performance)
+plan = derive_adaptation_plan(report)
+print(plan.recommendations)
+```
+
+> 👋 Simpler intro: [EASY_README.md](EASY_README.md) (English) · [EASY_README_KR.md](EASY_README_KR.md)
+
+---
 
 ## Why this is separate from omegaprompt
 

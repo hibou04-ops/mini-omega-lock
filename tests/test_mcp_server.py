@@ -26,13 +26,14 @@ def tools(mcp_app):
 EXPECTED_TOOLS = {
     "empirical_preflight",
     "measure_judge_consistency",
+    "measure_gate_flip_rate",
     "compute_context_margin",
     "noise_floor_estimate",
     "project_performance",
 }
 
 
-def test_five_probes_registered(tools):
+def test_six_probes_registered(tools):
     names = {t.name for t in tools}
     assert names == EXPECTED_TOOLS
 

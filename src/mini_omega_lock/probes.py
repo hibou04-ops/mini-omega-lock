@@ -54,6 +54,78 @@ def _score_for(judge_result: JudgeResult, rubric: JudgeRubric) -> float:
     return judge_result.weighted_score(rubric)
 
 
+def measure_gate_flip_rate(
+    *,
+    judge: LLMJudge,
+    rubric: JudgeRubric,
+    probe_item: DatasetItem,
+    target_response: str,
+    repeats: int = 5,
+) -> dict[str, dict[str, float | int | bool]]:
+    """Measure how often a hard gate flips on the same (response, rubric).
+
+    Reviewer A-3#5 emphasis: in Prompt CI, soft score noise is annoying
+    but a flipping hard gate is catastrophic — a candidate that
+    sometimes passes and sometimes fails the same gate makes the whole
+    ship verdict random. ``measure_judge_consistency`` only sees the
+    weighted score, so a judge whose gate decisions wobble while
+    keeping the score stable would look "consistent". This metric
+    surfaces that gap directly.
+
+    For each judge-mode hard gate the rubric declares, calls the judge
+    ``repeats`` times on the same input and counts the fraction of
+    consecutive call pairs where the gate's boolean outcome flipped.
+    A flip rate of 0.0 means the gate is rock-solid; 1.0 means it
+    flips every single call.
+
+    Returns a dict keyed by gate name. Each entry has:
+
+    - ``flip_rate``: fraction of the (repeats - 1) consecutive
+      transitions that changed (0.0 - 1.0).
+    - ``samples``: number of calls inspected (== ``repeats``).
+    - ``majority``: True iff the gate passed in > half of the calls.
+      Useful as a "what verdict would majority-vote produce" signal.
+    - ``passes``: count of true outcomes across the calls.
+
+    Defaults to 5 repeats (vs 3 in measure_judge_consistency) because
+    detecting flip patterns needs more data than estimating a mean.
+    """
+    judge_gates = [g.name for g in rubric.hard_gates if g.evaluator == "judge"]
+    if not judge_gates:
+        return {}
+
+    histories: dict[str, list[bool]] = {gate: [] for gate in judge_gates}
+    for _ in range(max(2, repeats)):
+        result, _usage = judge.score(
+            rubric=rubric, item=probe_item, target_response=target_response
+        )
+        for gate in judge_gates:
+            value = result.gate_results.get(gate)
+            if value is None:
+                # Treat absence as False — a missing gate is a structural
+                # judge failure, not a passing gate. (LLMJudge from PR1
+                # raises on this earlier; here we belt-and-brace in case
+                # a future judge implementation skips the check.)
+                value = False
+            histories[gate].append(bool(value))
+
+    out: dict[str, dict[str, float | int | bool]] = {}
+    for gate, history in histories.items():
+        n = len(history)
+        flips = sum(
+            1 for i in range(1, n) if history[i] != history[i - 1]
+        )
+        flip_rate = flips / max(1, n - 1)
+        passes = sum(1 for v in history if v)
+        out[gate] = {
+            "flip_rate": flip_rate,
+            "samples": n,
+            "majority": passes * 2 > n,
+            "passes": passes,
+        }
+    return out
+
+
 def measure_judge_consistency(
     *,
     judge: LLMJudge,

@@ -91,11 +91,16 @@ def empirical_preflight(
     consistency_repeats: int = 3,
     dataset_size_hint: int = 10,
     candidates_expected: int = 20,
+    strict_schema_probe_messages: list[str] | None = None,
+    strict_schema_provider: str | dict | None = None,
+    fitness_samples: list[float] | None = None,
 ) -> dict:
     """Run the combined judge / endpoint / performance preflight probe.
 
     Use BEFORE a full omegaprompt calibration to verify the runtime is
-    ship-grade. Costs ``consistency_repeats`` LLM calls on the probe item.
+    ship-grade. Costs ``consistency_repeats`` LLM calls on the probe item,
+    plus ``len(strict_schema_probe_messages)`` calls when the strict-schema
+    probe is requested.
 
     Args:
         rubric: Path to a JudgeRubric JSON, or an inline rubric dict.
@@ -114,16 +119,68 @@ def empirical_preflight(
         dataset_size_hint: Estimated dataset size for performance projection.
         candidates_expected: Estimated number of search candidates for
             performance projection.
+        strict_schema_probe_messages: Optional list of user messages to send
+            via strict-schema mode against ``strict_schema_provider`` (or the
+            judge provider when omitted). When supplied, ``endpoint.schema_reliability``
+            reflects the actual parse-success rate. When omitted, schema
+            reliability is fail-closed at 0.0 with an explicit warning so
+            the calling agent can tell "not measured" from "measured zero."
+        strict_schema_provider: Optional separate provider for the strict-
+            schema probe. Defaults to the judge provider when not given —
+            useful when the target and judge are different vendors and you
+            want to probe the target's schema reliability rather than the
+            judge's.
+        fitness_samples: Optional list of fitness floats from repeated
+            evaluations at fixed params. When supplied (>=2 samples),
+            ``performance.noise_floor`` reflects the actual variance.
 
     Returns:
-        Dict with ``judge_quality`` (consistency, anchoring_usage,
-        scale_monotonic, samples), ``endpoint`` (schema_reliability, etc.),
-        ``performance`` (mean_call_latency_ms, projected_wall_time_seconds,
-        noise_floor).
+        Dict with ``judge_quality``, ``endpoint``, ``performance``, and a
+        ``warnings`` list. Agents should read ``warnings`` before treating
+        any value as "good" — fail-closed defaults look numerically clean
+        but mean "we didn't measure this".
     """
     rubric_obj = _resolve_rubric(rubric)
     item_obj = _resolve_item(probe_item)
     judge = _build_judge(provider)
+
+    schema_provider_obj = None
+    schema_probes_seq: tuple = ()
+    schema_output_type: type | None = None
+    if strict_schema_probe_messages:
+        from omegaprompt.domain.enums import (
+            OutputBudgetBucket,
+            ReasoningProfile,
+            ResponseSchemaMode,
+        )
+        from omegaprompt.domain.judge import JudgeResult
+        from omegaprompt.providers import make_provider as _mp
+        from omegaprompt.providers.base import ProviderRequest
+
+        if strict_schema_provider is None:
+            schema_provider_obj = judge.provider
+        elif isinstance(strict_schema_provider, str):
+            schema_provider_obj = _mp(strict_schema_provider)
+        elif isinstance(strict_schema_provider, dict):
+            schema_provider_obj = _mp(
+                strict_schema_provider["name"],
+                model=strict_schema_provider.get("model"),
+                base_url=strict_schema_provider.get("base_url"),
+            )
+        else:
+            schema_provider_obj = strict_schema_provider
+
+        schema_output_type = JudgeResult
+        schema_probes_seq = tuple(
+            ProviderRequest(
+                system_prompt="Strict-schema probe.",
+                user_message=msg,
+                response_schema_mode=ResponseSchemaMode.FREEFORM,
+                output_budget_bucket=OutputBudgetBucket.SMALL,
+                reasoning_profile=ReasoningProfile.OFF,
+            )
+            for msg in strict_schema_probe_messages
+        )
 
     judge_q, endpoint, perf, warnings = _empirical_preflight(
         judge=judge,
@@ -135,6 +192,10 @@ def empirical_preflight(
         consistency_repeats=consistency_repeats,
         dataset_size_hint=dataset_size_hint,
         candidates_expected=candidates_expected,
+        strict_schema_provider=schema_provider_obj,
+        strict_schema_probes=schema_probes_seq,
+        strict_schema_output=schema_output_type,
+        fitness_samples=fitness_samples,
     )
     return {
         "judge_quality": judge_q.model_dump(mode="json"),

@@ -65,3 +65,17 @@ def test_compute_context_margin_executes_without_llm(mcp_app):
     )
     # FastMCP returns a list of content blocks; the first block has the JSON result.
     assert result is not None
+
+
+def test_empirical_preflight_schema_includes_strict_schema_probe_params(tools):
+    """Reviewer 2순위: MCP signature must accept strict_schema_probe_messages
+    so the composite empirical_preflight can actually probe schema reliability
+    rather than fail-closing to 0.0 every time."""
+    ep = next(t for t in tools if t.name == "empirical_preflight")
+    properties = ep.inputSchema["properties"]
+    assert "strict_schema_probe_messages" in properties, (
+        "MCP empirical_preflight must expose strict_schema_probe_messages — "
+        "without it the README's 'all five probes' claim doesn't match runtime."
+    )
+    assert "strict_schema_provider" in properties
+    assert "fitness_samples" in properties

@@ -19,6 +19,7 @@ from mcp.server.fastmcp import FastMCP
 from mini_omega_lock import (
     compute_context_margin as _compute_context_margin,
     empirical_preflight as _empirical_preflight,
+    measure_gate_flip_rate as _measure_gate_flip_rate,
     measure_judge_consistency as _measure_judge_consistency,
     noise_floor_estimate as _noise_floor_estimate,
     project_performance as _project_performance,
@@ -245,6 +246,57 @@ def measure_judge_consistency(
     return {
         "judge_quality": measurement.model_dump(mode="json"),
         "raw_results": [r.model_dump(mode="json") for r in raw],
+    }
+
+
+@mcp_app.tool()
+def measure_gate_flip_rate(
+    rubric: str | dict,
+    probe_item: dict,
+    target_response: str,
+    provider: str | dict,
+    repeats: int = 5,
+) -> dict:
+    """Measure how often a hard gate flips on the same input across repeats.
+
+    In Prompt CI a flipping hard gate is more catastrophic than soft-score
+    noise: a candidate that sometimes passes and sometimes fails the same
+    gate makes the ship verdict random. ``measure_judge_consistency``
+    only sees the weighted score, so a judge whose gate decisions wobble
+    while the score is stable looks "consistent" — this metric closes
+    that gap.
+
+    Returns a dict keyed by gate name. Each entry has ``flip_rate``,
+    ``samples``, ``majority``, and ``passes``. A flip_rate of 0.0 means
+    rock-solid; 1.0 means flips every call.
+
+    Args:
+        rubric: Path or inline dict for the JudgeRubric.
+        probe_item: Inline DatasetItem dict.
+        target_response: The candidate response to grade repeatedly.
+        provider: Provider for the LLM judge.
+        repeats: Number of grading repeats. Default 5 (vs 3 for
+            consistency, since detecting flip patterns needs more data).
+
+    Returns:
+        Dict with ``gate_flip_rates`` (per-gate flip rate dict) and
+        ``max_flip_rate`` (the worst gate's flip rate, 0-1, useful for
+        downstream gating).
+    """
+    rubric_obj = _resolve_rubric(rubric)
+    item_obj = _resolve_item(probe_item)
+    judge = _build_judge(provider)
+    per_gate = _measure_gate_flip_rate(
+        judge=judge,
+        rubric=rubric_obj,
+        probe_item=item_obj,
+        target_response=target_response,
+        repeats=repeats,
+    )
+    max_flip = max((v["flip_rate"] for v in per_gate.values()), default=0.0)
+    return {
+        "gate_flip_rates": per_gate,
+        "max_flip_rate": max_flip,
     }
 
 

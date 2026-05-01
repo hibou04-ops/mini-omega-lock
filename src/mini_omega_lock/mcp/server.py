@@ -125,7 +125,7 @@ def empirical_preflight(
     item_obj = _resolve_item(probe_item)
     judge = _build_judge(provider)
 
-    judge_q, endpoint, perf = _empirical_preflight(
+    judge_q, endpoint, perf, warnings = _empirical_preflight(
         judge=judge,
         rubric=rubric_obj,
         probe_item=item_obj,
@@ -140,6 +140,10 @@ def empirical_preflight(
         "judge_quality": judge_q.model_dump(mode="json"),
         "endpoint": endpoint.model_dump(mode="json"),
         "performance": perf.model_dump(mode="json"),
+        # Surface fail-closed warnings: agents must read this to know
+        # whether schema_reliability=0.0 means "measured zero" or
+        # "not measured (defaulted to 0)".
+        "warnings": warnings,
     }
 
 

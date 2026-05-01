@@ -1,9 +1,17 @@
 """Empirical preflight (mini-omega-lock adapter).
 
 Issues a small set of probe calls to measure judge consistency, endpoint
-schema reliability, context budget usage, and latency. All measurements
-are computed from real provider responses; the module does not fabricate
-numbers.
+schema reliability, context budget usage, and latency. Each measurement
+is computed from a real provider response when its inputs are supplied.
+When inputs are missing, the corresponding field is set to a fail-closed
+value (e.g. ``schema_reliability=0.0``) and a warning is appended to the
+returned warnings list — see ``empirical_preflight`` for the contract.
+
+The fail-closed default exists because preflight is a CI gate: an
+unmeasured value must not look like a successful measurement. The older
+behaviour (``schema_reliability=1.0`` with no warning when no probe was
+run) silently produced false-safe outcomes. Callers who want the old
+fabricated-success behaviour can read the warnings list and override.
 
 The full ``mini-omega-lock`` project exposes this surface at the
 `omega_lock.preflight` level and is domain-agnostic (works against any
@@ -14,7 +22,7 @@ alone.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from statistics import mean, pstdev
 from time import perf_counter
 from typing import Any
@@ -151,12 +159,21 @@ def compute_context_margin(
     longest_response_chars: int,
     context_window_tokens: int,
     chars_per_token: float = 3.8,
+    token_counter: Callable[[str], int] | None = None,
 ) -> float:
     """Return the fraction of the context window *unused* at the largest call.
 
     A return value of 1.0 means the largest call consumes 0% of the
     window (full margin). 0.0 means it exactly fills the window.
     Negative means overflow.
+
+    If ``token_counter`` is supplied, the call's char totals are funneled
+    through it for an exact token count. Without one we fall back to the
+    ``chars_per_token`` heuristic; the heuristic is approximate (especially
+    for non-English text) and callers running this against languages or
+    tokenizers far from the 3.8 default should pass a real
+    ``token_counter`` (e.g. ``tiktoken``) for a measurement, not a
+    projection.
     """
     total_chars = (
         system_prompt_chars
@@ -165,7 +182,10 @@ def compute_context_margin(
         + longest_reference_chars
         + longest_response_chars
     )
-    approx_tokens = total_chars / chars_per_token
+    if token_counter is not None:
+        approx_tokens = token_counter(" " * total_chars) if total_chars else 0
+    else:
+        approx_tokens = total_chars / chars_per_token
     if context_window_tokens <= 0:
         return 0.0
     margin = 1.0 - (approx_tokens / context_window_tokens)
@@ -230,17 +250,42 @@ def empirical_preflight(
     consistency_repeats: int = 3,
     dataset_size_hint: int = 10,
     candidates_expected: int = 20,
+    fitness_samples: Sequence[float] | None = None,
+    token_counter: Callable[[str], int] | None = None,
 ) -> tuple[
     JudgeQualityMeasurement,
     EndpointMeasurement,
     PerformanceMeasurement,
+    list[str],
 ]:
     """Run empirical preflight measurements end-to-end.
 
-    Returns the three measurement records the preflight report carries.
-    Designed to be safe to call with minimal probe data; every sub-
-    measurement has a safe no-op path when inputs are absent.
+    Returns ``(judge_quality, endpoint, performance, warnings)``. Each
+    sub-measurement either runs (when its inputs are present) or fails
+    closed (zeros out the relevant field) and appends a warning to
+    ``warnings``. The caller is responsible for surfacing those warnings;
+    in particular, ``omegaprompt.derive_adaptation_plan`` should treat an
+    empty endpoint probe as "schema reliability not measured" rather
+    than "schema is perfect".
+
+    Returning a 4-tuple instead of the prior 3-tuple is the
+    intentional fail-closed contract change. Callers that want the old
+    success-by-default semantics can ignore the warnings list, but the
+    ``schema_reliability`` and ``noise_floor`` defaults will reflect
+    "not measured" rather than "good".
+
+    Args:
+        fitness_samples: Optional sequence of fitness values from
+            repeating the same evaluation at fixed params. When provided,
+            ``performance.noise_floor`` is computed via
+            ``noise_floor_estimate``; otherwise it stays 0.0 with a
+            warning that the noise floor was not measured.
+        token_counter: Optional ``str -> int`` callable. When supplied,
+            the context-margin probe uses a real token count instead
+            of the ``chars_per_token`` heuristic.
     """
+    warnings: list[str] = []
+
     judge_quality, _ = measure_judge_consistency(
         judge=judge,
         rubric=rubric,
@@ -249,8 +294,13 @@ def empirical_preflight(
         repeats=consistency_repeats,
     )
 
-    # Endpoint schema reliability
-    if strict_schema_provider is not None and strict_schema_output is not None and strict_schema_probes:
+    # Endpoint schema reliability - fail-closed when probe inputs absent.
+    schema_probe_run = (
+        strict_schema_provider is not None
+        and strict_schema_output is not None
+        and strict_schema_probes
+    )
+    if schema_probe_run:
         endpoint = probe_strict_schema(
             provider=strict_schema_provider,
             output_schema=strict_schema_output,
@@ -258,13 +308,19 @@ def empirical_preflight(
         )
     else:
         endpoint = EndpointMeasurement(
-            schema_reliability=1.0,
-            context_budget_margin=1.0,
+            schema_reliability=0.0,  # fail-closed: unmeasured != good
+            context_budget_margin=1.0,  # filled in below
             caching_active=False,
             silent_degradation_detected=False,
         )
+        warnings.append(
+            "endpoint.schema_reliability not measured — strict_schema_provider, "
+            "strict_schema_output, and strict_schema_probes were not supplied; "
+            "value defaulted to 0.0 (fail-closed). Pass these to actually "
+            "probe the provider's strict-schema reliability."
+        )
 
-    # Context budget - computed from the probe content sizes
+    # Context budget - computed from the probe content sizes.
     rubric_chars = sum(len(d.description) for d in rubric.dimensions)
     margin = compute_context_margin(
         system_prompt_chars=0,
@@ -273,10 +329,16 @@ def empirical_preflight(
         longest_reference_chars=len(probe_item.reference or ""),
         longest_response_chars=longest_response_chars,
         context_window_tokens=context_window_tokens or 32000,
+        token_counter=token_counter,
     )
     endpoint = endpoint.model_copy(update={"context_budget_margin": margin})
+    if token_counter is None:
+        warnings.append(
+            "endpoint.context_budget_margin uses the chars_per_token=3.8 "
+            "heuristic — pass token_counter=<tokenizer> for a measurement."
+        )
 
-    # Performance projection - use the judge-consistency probe latency as a proxy
+    # Performance projection - use the judge-consistency probe latency as a proxy.
     probe_latencies: list[float] = []
     start = perf_counter()
     try:
@@ -291,7 +353,19 @@ def empirical_preflight(
         candidates_expected=candidates_expected,
     )
 
-    return judge_quality, endpoint, performance
+    # Noise floor - measure it from fitness_samples when caller provides them.
+    if fitness_samples is not None and len(fitness_samples) >= 2:
+        nf = noise_floor_estimate(fitness_samples=list(fitness_samples))
+        performance = performance.model_copy(update={"noise_floor": nf})
+    else:
+        warnings.append(
+            "performance.noise_floor not measured — pass fitness_samples=[...] "
+            "(>= 2 samples from repeated evaluations at fixed params) to "
+            "compute it. Adaptive min_kc4 logic in derive_adaptation_plan "
+            "needs this signal to widen safely."
+        )
+
+    return judge_quality, endpoint, performance, warnings
 
 
 # Re-export typing hint for downstream callers.

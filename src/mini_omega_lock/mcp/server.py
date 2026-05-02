@@ -11,6 +11,7 @@ not need to wire an LLMJudge themselves.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Sequence
 
@@ -24,6 +25,57 @@ from mini_omega_lock import (
     noise_floor_estimate as _noise_floor_estimate,
     project_performance as _project_performance,
 )
+
+
+# ---------------------------------------------------------------------------
+# Workspace boundary
+# ---------------------------------------------------------------------------
+#
+# Reviewer item #7: MCP tools accept rubric paths from agent input. Without a
+# boundary, an agent prompt could include ``"rubric": "/etc/passwd"`` (or any
+# absolute path / ``..`` traversal) and the rubric loader would dutifully read
+# it, leaking arbitrary file contents into the JSON-decode error message in
+# the MCP response. Bound the path resolution to a workspace root so paths
+# outside it raise a structured error before any disk read.
+#
+# The root comes from ``MINI_OMEGA_WORKSPACE_ROOT``. When unset we default to
+# the current working directory (the standard "agent invokes from project
+# root" case) so existing single-project setups keep working unchanged.
+
+
+def _workspace_root() -> Path:
+    """The directory all rubric path inputs must resolve inside.
+
+    Reads ``MINI_OMEGA_WORKSPACE_ROOT`` lazily so tests can monkeypatch it
+    per-call. Resolves to an absolute path so the comparison below is
+    stable across symlinks and relative inputs.
+    """
+    raw = os.environ.get("MINI_OMEGA_WORKSPACE_ROOT")
+    if raw:
+        return Path(raw).expanduser().resolve()
+    return Path.cwd().resolve()
+
+
+def _validate_workspace_path(candidate: Path) -> Path:
+    """Reject paths that escape the configured workspace root.
+
+    Raises ``ValueError`` (caught and surfaced as a structured MCP error)
+    when ``candidate`` resolves outside ``_workspace_root()``. Returns the
+    resolved path on success so the caller can use it directly.
+    """
+    root = _workspace_root()
+    resolved = candidate.expanduser().resolve()
+    try:
+        resolved.relative_to(root)
+    except ValueError as exc:
+        raise ValueError(
+            f"path {str(candidate)!r} resolves to {str(resolved)!r}, "
+            f"which is outside the configured workspace root "
+            f"{str(root)!r}. Set MINI_OMEGA_WORKSPACE_ROOT to widen the "
+            f"boundary, or pass an inline dict for the rubric instead "
+            f"of a path."
+        ) from exc
+    return resolved
 
 mcp_app = FastMCP(
     name="mini-omega-lock",
@@ -45,7 +97,11 @@ def _resolve_rubric(r):
     if isinstance(r, dict):
         return JudgeRubric.model_validate(r)
     if isinstance(r, (str, Path)):
-        return JudgeRubric.from_json(Path(r))
+        # Reviewer item #7: bound rubric path inputs to the workspace
+        # root before reading from disk. Inline dicts skip this path
+        # (no filesystem access), so they remain unrestricted.
+        safe_path = _validate_workspace_path(Path(r))
+        return JudgeRubric.from_json(safe_path)
     raise TypeError(f"Unsupported rubric input: {type(r).__name__}")
 
 

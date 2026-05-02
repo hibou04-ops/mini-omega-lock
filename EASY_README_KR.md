@@ -46,13 +46,15 @@ judge  = LLMJudge(provider=judge_provider)
 rubric = JudgeRubric(dimensions=[Dimension(name="accuracy", description="correct?", weight=1.0)])
 probe  = DatasetItem(id="probe", input="2+2", reference="4")
 
-judge_quality, endpoint, performance = empirical_preflight(
+judge_quality, endpoint, performance, warnings = empirical_preflight(
     judge=judge,
     rubric=rubric,
     probe_item=probe,
     probe_response="4",
     consistency_repeats=3,   # 기본값
 )
+for w in warnings:
+    print(f"[mini-omega-lock] {w}")
 
 # omegaprompt adaptation layer 에 feed:
 report = PreflightReport(judge_quality=judge_quality, endpoint=endpoint, performance=performance)
@@ -60,7 +62,7 @@ plan   = derive_adaptation_plan(report=report)
 # plan.min_kc4_override, plan.rescore_count, plan.schema_mode_override 등
 ```
 
-끝. Live API 호출 4번. `plan`이 omegaprompt에 뭘 조정할지 알려줌.
+끝. Live API 호출 4번. `plan`이 omegaprompt에 뭘 조정할지 알려줌. `warnings` 리스트는 fail-closed 기본값으로 떨어진 필드를 모두 명시하므로 CI에서는 load-bearing 으로 다뤄야 함.
 
 ## 6개 export 함수
 

@@ -28,21 +28,25 @@ issues real provider calls through :class:`omegaprompt.providers.LLMProvider`.
 
 from mini_omega_lock.probes import (
     compute_context_margin,
+    compute_context_margin_from_texts,
     empirical_preflight,
     measure_gate_flip_rate,
     measure_judge_consistency,
+    measure_scale_monotonicity,
     noise_floor_estimate,
     probe_strict_schema,
     project_performance,
 )
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 __all__ = [
     "compute_context_margin",
+    "compute_context_margin_from_texts",
     "empirical_preflight",
     "measure_gate_flip_rate",
     "measure_judge_consistency",
+    "measure_scale_monotonicity",
     "noise_floor_estimate",
     "probe_strict_schema",
     "project_performance",

@@ -123,6 +123,51 @@ def test_noise_floor_defaults_to_zero_with_warning_when_no_samples():
     assert any("noise_floor not measured" in w for w in warnings)
 
 
+class _FailingJudgeProvider:
+    """Always raises on .call() — simulates a flaky endpoint."""
+
+    name = "anthropic"
+    model = "scripted-fail"
+
+    def call(self, request):
+        raise RuntimeError("simulated endpoint failure")
+
+    def capabilities(self):
+        return ProviderCapabilities(
+            provider="anthropic",
+            tier=CapabilityTier.CLOUD,
+            supports_strict_schema=True,
+            supports_llm_judge=True,
+            ship_grade_judge=True,
+        )
+
+
+def test_consistency_probe_failure_does_not_poison_latency_mean():
+    """Reviewer item #6: a failed probe (e.g. timeout, 500) must not
+    leak its elapsed wall time into ``performance.mean_call_latency_ms``.
+    Pre-fix the consistency probe could raise, propagate up, and either
+    crash empirical_preflight or — in the older shape — append the
+    failure latency to the sample list. Now the failure is caught,
+    fail-closed defaults are used, latency mean is 0, and an explicit
+    warning says so."""
+    failing_judge = LLMJudge(provider=_FailingJudgeProvider())
+    judge_q, endpoint, perf, warnings = empirical_preflight(
+        judge=failing_judge,
+        rubric=_rubric(),
+        probe_item=_probe_item(),
+        probe_response="x",
+    )
+    # Fail-closed JudgeQualityMeasurement.
+    assert judge_q.consistency == 0.0
+    assert judge_q.samples == 0
+    # Failed probe latency does not appear in the projection.
+    assert perf.mean_call_latency_ms == 0.0
+    # Explicit warnings — agent can tell "consistency probe failed"
+    # apart from "everything fine, latency happens to be zero".
+    assert any("consistency probe failed" in w for w in warnings)
+    assert any("mean_call_latency_ms not measured" in w for w in warnings)
+
+
 def test_noise_floor_populated_when_fitness_samples_provided():
     _, _, perf, warnings = empirical_preflight(
         judge=_make_judge(),

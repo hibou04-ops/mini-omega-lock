@@ -172,11 +172,51 @@ def measure_judge_consistency(
         JudgeQualityMeasurement(
             consistency=consistency,
             anchoring_usage=min(1.0, anchoring),
-            scale_monotonic=True,  # single-item probe; monotonicity checked separately
+            # Fail-closed: a single-item consistency probe CANNOT measure
+            # bad < mid < good monotonicity. The pre-fix value was a
+            # hardcoded True, which rubber-stamped a property that was
+            # never tested. Use ``measure_scale_monotonicity`` against an
+            # ordered fixture (or pass ``monotonic_examples=`` to
+            # ``empirical_preflight``) to actually measure this.
+            scale_monotonic=False,
             samples=repeats,
         ),
         results,
     )
+
+
+def measure_scale_monotonicity(
+    *,
+    judge: LLMJudge,
+    rubric: JudgeRubric,
+    ordered_examples: Sequence[tuple[DatasetItem, str]],
+) -> bool:
+    """Verify the judge preserves a known bad < mid < good ordering.
+
+    ``ordered_examples`` is a sequence of ``(item, response)`` pairs in
+    ascending quality order — index 0 is the worst, index -1 the best.
+    The judge scores each pair once; this function returns ``True``
+    iff the resulting weighted scores are non-decreasing in the
+    declared order.
+
+    Two examples (bad < good) is the minimum but produces a weak signal;
+    three or more (bad < mid < good) is recommended.
+
+    Returns:
+        bool. ``True`` iff scores are non-decreasing across the ordering.
+        ``False`` if any earlier example outscored a later one — that
+        means the judge's ordering disagrees with the declared scale.
+    """
+    if len(ordered_examples) < 2:
+        raise ValueError(
+            "measure_scale_monotonicity requires at least 2 ordered_examples "
+            "(ideally 3+: bad < mid < good)."
+        )
+    scores: list[float] = []
+    for item, response in ordered_examples:
+        result, _ = judge.score(rubric=rubric, item=item, target_response=response)
+        scores.append(_score_for(result, rubric))
+    return all(scores[i] <= scores[i + 1] for i in range(len(scores) - 1))
 
 
 # ----- endpoint reliability -----
@@ -193,7 +233,21 @@ def probe_strict_schema(
     The adapter's native strict-schema path is expected to raise
     :class:`ProviderError` on parse failure; this helper counts
     successes vs exceptions.
+
+    Raises:
+        ValueError: When ``probes`` is empty. A library helper that
+            silently returns ``reliability=1.0`` for "no measurement"
+            would be exactly the false-safe default the package is
+            built to avoid. ``empirical_preflight`` catches the empty
+            case earlier and converts it into a fail-closed warning;
+            direct callers must hand in at least one probe.
     """
+    if not probes:
+        raise ValueError(
+            "probe_strict_schema requires at least one ProviderRequest in `probes`. "
+            "An empty list cannot be measured — call empirical_preflight() instead "
+            "if you want a fail-closed default + warning, or supply real probes."
+        )
     successes = 0
     total = 0
     for base_req in probes:
@@ -210,7 +264,7 @@ def probe_strict_schema(
                 successes += 1
         except ProviderError:
             continue
-    reliability = successes / total if total else 1.0
+    reliability = successes / total
     return EndpointMeasurement(
         schema_reliability=reliability,
         context_budget_margin=1.0,  # filled in separately
@@ -233,20 +287,35 @@ def compute_context_margin(
     chars_per_token: float = 3.8,
     token_counter: Callable[[str], int] | None = None,
 ) -> float:
-    """Return the fraction of the context window *unused* at the largest call.
+    """Length-based projection of fraction of the context window unused.
 
     A return value of 1.0 means the largest call consumes 0% of the
     window (full margin). 0.0 means it exactly fills the window.
     Negative means overflow.
 
-    If ``token_counter`` is supplied, the call's char totals are funneled
-    through it for an exact token count. Without one we fall back to the
-    ``chars_per_token`` heuristic; the heuristic is approximate (especially
-    for non-English text) and callers running this against languages or
-    tokenizers far from the 3.8 default should pass a real
-    ``token_counter`` (e.g. ``tiktoken``) for a measurement, not a
-    projection.
+    This is a **projection**, not a tokenizer-exact measurement. The
+    char counts are divided by ``chars_per_token`` (default 3.8). The
+    heuristic is approximate — especially for non-English text, code,
+    numerics, and mixed scripts (Korean + English). For an exact
+    measurement, call :func:`compute_context_margin_from_texts` with a
+    real tokenizer.
+
+    Note:
+        ``token_counter`` is accepted for backwards compatibility but is
+        applied to a synthetic whitespace string of length ``total_chars``,
+        which is **not** equivalent to tokenizing real text. If supplied,
+        it is now ignored; pass real texts to
+        :func:`compute_context_margin_from_texts` instead.
     """
+    if token_counter is not None:
+        # Pre-fix behaviour ran ``token_counter(" " * total_chars)`` which
+        # produces tokens-of-spaces, not the actual text the caller cares
+        # about. Silently giving them that number was worse than ignoring
+        # the counter — they would think it was tokenizer-exact when it
+        # was not. Direction: ignore here, route to *_from_texts for real
+        # tokenization. (No exception so existing callers keep running;
+        # the *_from_texts variant is documented in the docstring.)
+        pass
     total_chars = (
         system_prompt_chars
         + rubric_chars
@@ -254,14 +323,64 @@ def compute_context_margin(
         + longest_reference_chars
         + longest_response_chars
     )
-    if token_counter is not None:
-        approx_tokens = token_counter(" " * total_chars) if total_chars else 0
-    else:
-        approx_tokens = total_chars / chars_per_token
+    approx_tokens = total_chars / chars_per_token
     if context_window_tokens <= 0:
         return 0.0
     margin = 1.0 - (approx_tokens / context_window_tokens)
     return margin
+
+
+def compute_context_margin_from_texts(
+    *,
+    system_prompts: Sequence[str] = (),
+    rubric_text: str = "",
+    inputs: Sequence[str] = (),
+    references: Sequence[str] = (),
+    candidate_responses: Sequence[str] = (),
+    context_window_tokens: int,
+    token_counter: Callable[[str], int],
+) -> float:
+    """Tokenizer-exact context margin from the actual texts of the largest call.
+
+    Each ``Sequence[str]`` argument is a population; the function picks
+    the largest member of each (by token count) and sums them. This
+    matches the worst-case "longest variant" framing of
+    :func:`compute_context_margin` while using real tokenization rather
+    than a chars-per-token heuristic.
+
+    Args:
+        system_prompts: Population of system prompt variants under test.
+            The longest is treated as the worst case.
+        rubric_text: Concatenated rubric body (dimensions + hard gates +
+            descriptions). One-shot, not a population.
+        inputs: Dataset input texts. Largest used.
+        references: Dataset reference texts. Largest used; can be empty.
+        candidate_responses: Observed candidate response texts. Largest
+            used; can be empty if no responses sampled yet.
+        context_window_tokens: Provider context window in tokens.
+        token_counter: Real ``str -> int`` tokenizer (e.g. ``tiktoken``,
+            ``anthropic``'s tokenizer, ``transformers`` AutoTokenizer).
+            Required — this function exists *because* the caller has one.
+
+    Returns:
+        ``1 - (longest_call_tokens / context_window_tokens)``. Negative
+        means overflow.
+    """
+    if context_window_tokens <= 0:
+        return 0.0
+
+    def _largest(texts: Sequence[str]) -> int:
+        if not texts:
+            return 0
+        return max(token_counter(t) for t in texts)
+
+    prompt_tokens = _largest(system_prompts)
+    input_tokens = _largest(inputs)
+    reference_tokens = _largest(references)
+    response_tokens = _largest(candidate_responses)
+    rubric_tokens = token_counter(rubric_text) if rubric_text else 0
+    total = prompt_tokens + rubric_tokens + input_tokens + reference_tokens + response_tokens
+    return 1.0 - (total / context_window_tokens)
 
 
 # ----- performance projection -----
@@ -324,6 +443,9 @@ def empirical_preflight(
     candidates_expected: int = 20,
     fitness_samples: Sequence[float] | None = None,
     token_counter: Callable[[str], int] | None = None,
+    system_prompts: Sequence[str] = (),
+    monotonic_examples: Sequence[tuple[DatasetItem, str]] | None = None,
+    gate_flip_repeats: int = 5,
 ) -> tuple[
     JudgeQualityMeasurement,
     EndpointMeasurement,
@@ -358,13 +480,110 @@ def empirical_preflight(
     """
     warnings: list[str] = []
 
-    judge_quality, _ = measure_judge_consistency(
-        judge=judge,
-        rubric=rubric,
-        probe_item=probe_item,
-        target_response=probe_response,
-        repeats=consistency_repeats,
+    # Reviewer item #6: consistency probe and latency probe are the
+    # same physical calls; reuse the elapsed time. Wrapped in try/except
+    # so a probe failure doesn't (a) crash empirical_preflight at the
+    # first measurement, and (b) doesn't poison the latency mean with
+    # failed-call wall time. On failure we record a warning and fall
+    # back to fail-closed JudgeQualityMeasurement defaults.
+    consistency_t0 = perf_counter()
+    try:
+        judge_quality, _ = measure_judge_consistency(
+            judge=judge,
+            rubric=rubric,
+            probe_item=probe_item,
+            target_response=probe_response,
+            repeats=consistency_repeats,
+        )
+        consistency_succeeded = True
+    except Exception as exc:
+        warnings.append(
+            f"judge_quality.consistency probe failed: "
+            f"{type(exc).__name__}: {exc}; defaulted to fail-closed "
+            f"JudgeQualityMeasurement (consistency=0.0). The failed "
+            f"probe latency is NOT included in the performance "
+            f"projection — only successful probe latency is used."
+        )
+        judge_quality = JudgeQualityMeasurement(
+            consistency=0.0,
+            anchoring_usage=0.0,
+            scale_monotonic=False,
+            samples=0,
+        )
+        consistency_succeeded = False
+    consistency_elapsed_ms = (perf_counter() - consistency_t0) * 1000.0
+    # Only count probe wall time as a latency sample when the probe
+    # actually succeeded. A 30s timeout from a failed call must not
+    # flow into mean_call_latency_ms as if it were a successful sample.
+    avg_call_latency_ms = (
+        consistency_elapsed_ms / max(1, consistency_repeats)
+        if consistency_succeeded and consistency_repeats > 0 else 0.0
     )
+
+    # Hard-gate flip rate — surface a stability number that weighted
+    # consistency cannot see. A judge whose score is stable but whose
+    # gate flips True/False randomises the ship verdict. Measured here
+    # only if the rubric declares judge-mode gates.
+    judge_gates = [g for g in rubric.hard_gates if g.evaluator == "judge"]
+    if judge_gates and gate_flip_repeats > 0:
+        try:
+            flip_results = measure_gate_flip_rate(
+                judge=judge,
+                rubric=rubric,
+                probe_item=probe_item,
+                target_response=probe_response,
+                repeats=gate_flip_repeats,
+            )
+            max_flip = max(
+                (float(r["flip_rate"]) for r in flip_results.values()),
+                default=0.0,
+            )
+            if max_flip > 0.0:
+                worst = max(
+                    flip_results.items(),
+                    key=lambda kv: float(kv[1]["flip_rate"]),
+                )
+                warnings.append(
+                    f"judge gate '{worst[0]}' flipped on "
+                    f"{float(worst[1]['flip_rate']):.2f} of consecutive call pairs "
+                    f"(over {int(worst[1]['samples'])} repeats); ship verdict will "
+                    f"be unstable. Re-spec the gate or raise rescore_count."
+                )
+        except Exception as exc:
+            warnings.append(
+                f"judge_quality.gate_flip_rate probe failed: "
+                f"{type(exc).__name__}: {exc}"
+            )
+    elif not judge_gates:
+        # No judge-mode gates -> nothing to measure; not a warning.
+        pass
+
+    # Scale monotonicity — single-item consistency cannot measure this.
+    # If the caller passed an ordered fixture, run it; otherwise warn.
+    if monotonic_examples is not None and len(monotonic_examples) >= 2:
+        try:
+            mono = measure_scale_monotonicity(
+                judge=judge,
+                rubric=rubric,
+                ordered_examples=monotonic_examples,
+            )
+            judge_quality = judge_quality.model_copy(update={"scale_monotonic": mono})
+            if not mono:
+                warnings.append(
+                    "judge_quality.scale_monotonic = False — judge ranking "
+                    "disagrees with the supplied bad < good ordering."
+                )
+        except Exception as exc:  # pragma: no cover - defensive
+            warnings.append(
+                f"judge_quality.scale_monotonic probe failed: "
+                f"{type(exc).__name__}: {exc}; defaulted to False."
+            )
+    else:
+        warnings.append(
+            "judge_quality.scale_monotonic not measured — pass "
+            "monotonic_examples=[(bad_item, bad_resp), ..., (good_item, good_resp)] "
+            "to verify bad < mid < good ordering. Defaulted to False (fail-closed)."
+        )
 
     # Endpoint schema reliability - fail-closed when probe inputs absent.
     schema_probe_run = (
@@ -393,37 +612,63 @@ def empirical_preflight(
         )
 
     # Context budget - computed from the probe content sizes.
-    rubric_chars = sum(len(d.description) for d in rubric.dimensions)
-    margin = compute_context_margin(
-        system_prompt_chars=0,
-        rubric_chars=rubric_chars,
-        longest_input_chars=len(probe_item.input or ""),
-        longest_reference_chars=len(probe_item.reference or ""),
-        longest_response_chars=longest_response_chars,
-        context_window_tokens=context_window_tokens or 32000,
-        token_counter=token_counter,
-    )
-    endpoint = endpoint.model_copy(update={"context_budget_margin": margin})
-    if token_counter is None:
+    if token_counter is not None:
+        # Tokenizer-exact path. Build text populations from what we have
+        # in scope; system_prompts is provided when the caller knows the
+        # full prompt variant set.
+        rubric_text = " ".join(d.description for d in rubric.dimensions if d.description)
+        margin = compute_context_margin_from_texts(
+            system_prompts=tuple(system_prompts) if system_prompts else (),
+            rubric_text=rubric_text,
+            inputs=(probe_item.input,) if probe_item.input else (),
+            references=(probe_item.reference,) if probe_item.reference else (),
+            candidate_responses=(probe_response,) if probe_response else (),
+            context_window_tokens=context_window_tokens or 32000,
+            token_counter=token_counter,
+        )
+        if not system_prompts:
+            warnings.append(
+                "endpoint.context_budget_margin computed without a "
+                "system_prompts population — system prompt overhead not "
+                "accounted for. Pass system_prompts=[...] when known."
+            )
+    else:
+        rubric_chars = sum(len(d.description) for d in rubric.dimensions)
+        margin = compute_context_margin(
+            system_prompt_chars=0,
+            rubric_chars=rubric_chars,
+            longest_input_chars=len(probe_item.input or ""),
+            longest_reference_chars=len(probe_item.reference or ""),
+            longest_response_chars=longest_response_chars,
+            context_window_tokens=context_window_tokens or 32000,
+        )
         warnings.append(
             "endpoint.context_budget_margin uses the chars_per_token=3.8 "
             "heuristic — pass token_counter=<tokenizer> for a measurement."
         )
+    endpoint = endpoint.model_copy(update={"context_budget_margin": margin})
 
-    # Performance projection - use the judge-consistency probe latency as a proxy.
-    probe_latencies: list[float] = []
-    start = perf_counter()
-    try:
-        judge.score(rubric=rubric, item=probe_item, target_response=probe_response)
-    except Exception:  # pragma: no cover - defensive
-        pass
-    probe_latencies.append((perf_counter() - start) * 1000.0)
-
+    # Performance projection — reuse the consistency probe's average
+    # call latency rather than issuing a fresh probe call. The pre-fix
+    # version made one extra call AND swallowed its exception, then
+    # appended the failure latency to the sample list; that double-
+    # billed the user and could put failed-call elapsed times into the
+    # mean. Now we rely on the work we already paid for, and item #6
+    # of the audit review further separates success vs failure: only
+    # successful probe latency reaches ``probe_latencies_ms``. If the
+    # consistency probe failed, ``avg_call_latency_ms`` is 0 and the
+    # mean falls back to 0 with no spurious "30s typical call" claim.
     performance = project_performance(
-        probe_latencies_ms=probe_latencies,
+        probe_latencies_ms=[avg_call_latency_ms] if avg_call_latency_ms > 0 else [],
         dataset_size=dataset_size_hint,
         candidates_expected=candidates_expected,
     )
+    if not consistency_succeeded:
+        warnings.append(
+            "performance.mean_call_latency_ms not measured — the "
+            "consistency probe failed. Treat the projected wall time "
+            "as 'not estimated' rather than 'fast'."
+        )
 
     # Noise floor - measure it from fitness_samples when caller provides them.
     if fitness_samples is not None and len(fitness_samples) >= 2:

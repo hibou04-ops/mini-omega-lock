@@ -46,13 +46,15 @@ judge  = LLMJudge(provider=judge_provider)
 rubric = JudgeRubric(dimensions=[Dimension(name="accuracy", description="correct?", weight=1.0)])
 probe  = DatasetItem(id="probe", input="2+2", reference="4")
 
-judge_quality, endpoint, performance = empirical_preflight(
+judge_quality, endpoint, performance, warnings = empirical_preflight(
     judge=judge,
     rubric=rubric,
     probe_item=probe,
     probe_response="4",
     consistency_repeats=3,   # default
 )
+for w in warnings:
+    print(f"[mini-omega-lock] {w}")
 
 # Feed into omegaprompt's adaptation layer:
 report = PreflightReport(judge_quality=judge_quality, endpoint=endpoint, performance=performance)
@@ -60,7 +62,7 @@ plan   = derive_adaptation_plan(report=report)
 # plan.min_kc4_override, plan.rescore_count, plan.schema_mode_override, etc.
 ```
 
-That's it. 4 live API calls. `plan` tells omegaprompt what to adjust.
+That's it. 4 live API calls. `plan` tells omegaprompt what to adjust. The `warnings` list names every field that fell back to a fail-closed default — treat it as load-bearing in CI.
 
 ## The 6 exported functions
 

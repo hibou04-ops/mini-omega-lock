@@ -29,7 +29,7 @@ pip install omegaprompt mini-omega-lock
 - **Performance projection** — probe latency × calibration scale → wall-time estimate before launching.
 - **Noise floor** — fitness stdev under identical params → adaptive `min_kc4` threshold.
 
-One call (`empirical_preflight()`) returns the three records `omegaprompt`'s `derive_adaptation_plan()` consumes.
+One call (`empirical_preflight()`) returns the three measurement records `omegaprompt`'s `derive_adaptation_plan()` consumes, plus a `warnings` list naming every field that fell back to a fail-closed default (e.g. `schema_reliability=0.0` when the strict-schema probe was not supplied).
 
 > **Looking for the analytical (no-API, deterministic) preflight?** See sibling tool [`mini-antemortem-cli`](https://pypi.org/project/mini-antemortem-cli/) — same plugin interface, deterministic rule-based classifier instead of LLM probes.
 
@@ -50,9 +50,12 @@ rubric = JudgeRubric(dimensions=[Dimension(name="accuracy", description="x", wei
 probe_item = DatasetItem(id="probe", input="2+2", reference="4")
 
 # One call → five measurements → adaptation plan
-judge_quality, endpoint, performance = empirical_preflight(
-    judge=judge, rubric=rubric, probe_item=probe_item, n_consistency_runs=3,
+judge_quality, endpoint, performance, warnings = empirical_preflight(
+    judge=judge, rubric=rubric, probe_item=probe_item,
+    probe_response="4", consistency_repeats=3,
 )
+for w in warnings:
+    print(f"[mini-omega-lock] {w}")
 
 report = PreflightReport(judge_quality=judge_quality, endpoint=endpoint, performance=performance)
 plan = derive_adaptation_plan(report)
@@ -81,7 +84,7 @@ pip install omegaprompt mini-omega-lock
 | Performance projection | `project_performance` | Mean probe latency → projected calibration wall time. |
 | Noise floor | `noise_floor_estimate` | Stdev of fitness under identical parameters. Sets adaptive `min_kc4`. |
 
-The composite entry point is `empirical_preflight()`, which runs all five in one call and returns the three measurement records omegaprompt's adaptation layer consumes.
+The composite entry point is `empirical_preflight()`, which runs all five in one call and returns a 4-tuple — three measurement records omegaprompt's adaptation layer consumes plus a `warnings` list. Any unmeasured field is fail-closed (e.g. `schema_reliability=0.0` rather than `1.0`) and named in the warnings; CI gates should treat the warnings list as load-bearing, not cosmetic.
 
 ## Usage
 
@@ -97,7 +100,7 @@ judge = LLMJudge(provider=judge_provider)
 rubric = JudgeRubric(dimensions=[Dimension(name="accuracy", description="x", weight=1.0)])
 probe_item = DatasetItem(id="probe", input="2+2", reference="4")
 
-judge_quality, endpoint, performance = empirical_preflight(
+judge_quality, endpoint, performance, warnings = empirical_preflight(
     judge=judge,
     rubric=rubric,
     probe_item=probe_item,
@@ -106,6 +109,10 @@ judge_quality, endpoint, performance = empirical_preflight(
     dataset_size_hint=10,
     candidates_expected=20,
 )
+
+# Surface fail-closed warnings before trusting the measurements.
+for w in warnings:
+    print(f"[mini-omega-lock] {w}")
 
 report = PreflightReport(
     judge_quality=judge_quality,

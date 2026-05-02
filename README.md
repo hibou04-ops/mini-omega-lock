@@ -125,7 +125,7 @@ plan = derive_adaptation_plan(report=report)
 
 ## Design principles
 
-- **No fabricated numbers.** Every measurement is computed from a real provider response. No heuristic estimation.
+- **No fabricated success.** Unmeasured fields fail closed (`schema_reliability=0.0`, `noise_floor=0.0`, `scale_monotonic=False`) and emit explicit warnings — agents can tell "measured zero" from "we never ran the probe". The context-margin probe runs as a length-based projection by default (`compute_context_margin`, `chars_per_token=3.8`); pass real texts and a `token_counter` to upgrade to a tokenizer-exact measurement (`compute_context_margin_from_texts`).
 - **Minimal probe budget.** Default 3 consistency repeats + 3 schema probes + 1 context-margin compute = 7-10 API calls per preflight. Worth < $0.01 on frontier tiers.
 - **Protocol-conformant output.** Emits `omegaprompt.preflight.contracts.JudgeQualityMeasurement` / `EndpointMeasurement` / `PerformanceMeasurement` exactly. No shape drift.
 - **Composable.** Can run alongside `mini-antemortem-cli` (analytical preflight) into the same `PreflightReport`.

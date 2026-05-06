@@ -13,6 +13,10 @@ import json
 
 import pytest
 
+# mcp is an optional extra; skip the whole file if it isn't installed
+# so the default `pytest -q` (without `--extra mcp`) doesn't error out.
+pytest.importorskip("mcp")
+
 from omegaprompt.domain.judge import Dimension, HardGate, JudgeResult, JudgeRubric
 from omegaprompt.providers.base import (
     CapabilityTier,

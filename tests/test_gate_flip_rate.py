@@ -205,6 +205,7 @@ def test_gate_flip_rate_repeats_clamped_to_two_minimum():
 
 def test_mcp_measure_gate_flip_rate_returns_max_flip_rate(monkeypatch):
     """End-to-end MCP execution returns per-gate dict + max."""
+    pytest.importorskip("mcp")
     from mini_omega_lock.mcp import server as srv
 
     class _Stub:

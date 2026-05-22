@@ -1,0 +1,23 @@
+{
+  "name": "strict_schema_failure",
+  "description": "Schema probe outcomes are [ok, fail, none]: success rate is 1/3, computed only from real successes.",
+  "inputs": {
+    "scripted_scores": [4, 4, 4],
+    "consistency_repeats": 3,
+    "include_schema_probe": true,
+    "schema_probe_outcomes": ["ok", "fail", "none"],
+    "fitness_samples": [0.0, 2.0],
+    "monotonic_examples": true,
+    "token_counter": "approx",
+    "system_prompts": ["You are a judge."]
+  },
+  "expected": {
+    "endpoint": {
+      "schema_reliability": 0.3333333333333333,
+      "context_budget_margin_sign": "positive"
+    },
+    "warnings_contains_none_of": [
+      "schema_reliability not measured"
+    ]
+  }
+}

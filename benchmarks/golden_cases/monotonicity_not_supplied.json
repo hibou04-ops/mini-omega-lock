@@ -1,0 +1,36 @@
+{
+  "name": "monotonicity_not_supplied",
+  "description": "monotonic_examples not supplied: scale_monotonic stays False (fail-closed) with an explicit warning.",
+  "inputs": {
+    "scripted_scores": [4, 4, 4],
+    "consistency_repeats": 3,
+    "include_schema_probe": true,
+    "schema_probe_outcomes": ["ok", "ok", "ok"],
+    "fitness_samples": [0.0, 2.0],
+    "monotonic_examples": false,
+    "token_counter": "approx",
+    "system_prompts": ["You are a judge."]
+  },
+  "expected": {
+    "judge_quality": {
+      "consistency": 1.0,
+      "scale_monotonic": false,
+      "samples": 3
+    },
+    "endpoint": {
+      "schema_reliability": 1.0,
+      "context_budget_margin_sign": "positive"
+    },
+    "performance": {
+      "noise_floor": 1.0
+    },
+    "warnings_contains_all_of": [
+      "scale_monotonic not measured"
+    ],
+    "warnings_contains_none_of": [
+      "schema_reliability not measured",
+      "noise_floor not measured",
+      "chars_per_token"
+    ]
+  }
+}

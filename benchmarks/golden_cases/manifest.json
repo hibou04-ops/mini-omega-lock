@@ -1,0 +1,14 @@
+{
+  "canonicalisation": "json.dumps(parsed, sort_keys=True, indent=2, ensure_ascii=False) + '\\n'; UTF-8",
+  "files": {
+    "all_probes_supplied.json": "252eb5eff32bb64d6c665ec338b3e35b108275f7d8b76f2c33b670335be59ce1",
+    "missing_strict_schema.json": "393632c431379b3511a681c2814446dc1bcbb5bea2605cc924e04cab235cc496",
+    "monotonicity_not_supplied.json": "b18c5263bd9950ce3c2b0c8b86bd62cfc92ba3a7c8143dda09dbcdd3f2d3f8e2",
+    "noise_floor_missing.json": "3754ae6c7c278ec7f2dfe71ac2d43f93006be51ae83a2cce319308fa93b1b48c",
+    "noise_floor_supplied.json": "70385d2a8d787f1e5a5ea155238c6305592c7e40b46b2bbab74b39ed2f88b65f",
+    "strict_schema_failure.json": "262466baca065951ec14b68a1c488609b86d2632bf4baf10761941c9252a22e8",
+    "token_counter_exact.json": "634312b78e67ef11ae65547fc04e55bfde51298fa143fccd155b1fab2d02459d",
+    "token_counter_heuristic.json": "17214e285bcbeb820c64700ad374e4d1afe4a66d28d75d885110a02269259753"
+  },
+  "format": "mini-omega-lock fixture-integrity v1"
+}

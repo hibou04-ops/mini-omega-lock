@@ -1,0 +1,37 @@
+{
+  "name": "missing_strict_schema",
+  "description": "Schema probe inputs absent: schema_reliability fail-closes to 0.0 with an explicit warning.",
+  "inputs": {
+    "scripted_scores": [4, 4, 4],
+    "consistency_repeats": 3,
+    "include_schema_probe": false,
+    "fitness_samples": [0.0, 2.0],
+    "monotonic_examples": true,
+    "token_counter": "approx",
+    "system_prompts": ["You are a judge."]
+  },
+  "expected": {
+    "judge_quality": {
+      "consistency": 1.0,
+      "scale_monotonic": true,
+      "samples": 3
+    },
+    "endpoint": {
+      "schema_reliability": 0.0,
+      "context_budget_margin_sign": "positive",
+      "caching_active": false,
+      "silent_degradation_detected": false
+    },
+    "performance": {
+      "noise_floor": 1.0
+    },
+    "warnings_contains_all_of": [
+      "schema_reliability not measured"
+    ],
+    "warnings_contains_none_of": [
+      "scale_monotonic not measured",
+      "noise_floor not measured",
+      "chars_per_token"
+    ]
+  }
+}

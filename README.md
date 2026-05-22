@@ -3,19 +3,83 @@
 > **Empirical preflight probes for [omegaprompt](https://pypi.org/project/omegaprompt/) calibration.** Measures judge consistency, endpoint schema reliability, context-budget margin, latency, and noise floor — emits `PreflightReport` records that omegaprompt's `derive_adaptation_plan` consumes.
 
 [![CI](https://github.com/hibou04-ops/mini-omega-lock/actions/workflows/ci.yml/badge.svg)](https://github.com/hibou04-ops/mini-omega-lock/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/badge/pypi-0.3.0-blue.svg)](https://pypi.org/project/mini-omega-lock/)
+[![PyPI](https://img.shields.io/badge/pypi-0.5.0-blue.svg)](https://pypi.org/project/mini-omega-lock/)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org)
-[![Tests](https://img.shields.io/badge/tests-40%20passing-brightgreen.svg)](tests/)
-[![Parent](https://img.shields.io/badge/parent-omegaprompt%E2%89%A51.4.0-blueviolet.svg)](https://pypi.org/project/omegaprompt/)
-
-> **Part of the omegaprompt toolkit** — [omegaprompt](https://github.com/hibou04-ops/omegaprompt) (calibration engine) · [omega-lock](https://github.com/hibou04-ops/omega-lock) (audit framework) · [antemortem-cli](https://github.com/hibou04-ops/antemortem-cli) (pre-implementation recon CLI) · [mini-omega-lock](https://github.com/hibou04-ops/mini-omega-lock) (empirical preflight, this repo) · [mini-antemortem-cli](https://github.com/hibou04-ops/mini-antemortem-cli) (analytical preflight) · [Antemortem](https://github.com/hibou04-ops/Antemortem) (methodology). Cross-toolkit cookbook: [AGENT_TRIGGERS.md](https://github.com/hibou04-ops/omegaprompt/blob/main/AGENT_TRIGGERS.md).
+[![Parent](https://img.shields.io/badge/parent-omegaprompt%E2%89%A51.1.0-blueviolet.svg)](https://pypi.org/project/omegaprompt/)
 
 ```bash
-pip install omegaprompt mini-omega-lock
+pip install mini-omega-lock
 ```
 
-**MCP server.** This package also exposes its five probes (`empirical_preflight`, `measure_judge_consistency`, `compute_context_margin`, `noise_floor_estimate`, `project_performance`) as agent-callable MCP tools. Run `pip install "mini-omega-lock[mcp]"` then `python -m mini_omega_lock.mcp` (stdio, default for Claude Code). See [AGENT_TRIGGERS.md scenario 2](https://github.com/hibou04-ops/omegaprompt/blob/main/AGENT_TRIGGERS.md#scenario-2--pre-calibration-sanity-check).
+## Trust & verification
+
+| Topic | English | 한국어 |
+|---|---|---|
+| Generated source-of-truth claims | [docs/generated/claims.md](docs/generated/claims.md) | [docs/generated/claims_kr.md](docs/generated/claims_kr.md) |
+| Trust model | [docs/trust_model.md](docs/trust_model.md) | [docs/trust_model_kr.md](docs/trust_model_kr.md) |
+| Toolkit positioning | [docs/toolkit_positioning.md](docs/toolkit_positioning.md) | [docs/toolkit_positioning_kr.md](docs/toolkit_positioning_kr.md) |
+| Claim ledger | [docs/claim_ledger.md](docs/claim_ledger.md) | [docs/claim_ledger_kr.md](docs/claim_ledger_kr.md) |
+| Examples / deterministic demo | [docs/examples.md](docs/examples.md) | [docs/examples_kr.md](docs/examples_kr.md) |
+| Release checklist | [docs/release_checklist.md](docs/release_checklist.md) | — |
+| Post-release verification | [docs/post_release_verification.md](docs/post_release_verification.md) | — |
+| Simpler intro | [EASY_README.md](EASY_README.md) | [EASY_README_KR.md](EASY_README_KR.md) |
+| Full Korean | — | [README_KR.md](README_KR.md) |
+| Cross-toolkit cookbook | [AGENT_TRIGGERS.md](https://github.com/hibou04-ops/omegaprompt/blob/main/AGENT_TRIGGERS.md) | — |
+
+Sibling projects: [omegaprompt](https://github.com/hibou04-ops/omegaprompt) (calibration engine) · [omega-lock](https://github.com/hibou04-ops/omega-lock) (broader audit framework) · [antemortem-cli](https://github.com/hibou04-ops/antemortem-cli) (pre-implementation recon CLI) · [mini-antemortem-cli](https://github.com/hibou04-ops/mini-antemortem-cli) (analytical preflight) · [Antemortem](https://github.com/hibou04-ops/Antemortem) (methodology).
+
+## Use it when
+
+- The same response keeps getting different judge scores across runs.
+- Your endpoint sometimes rejects STRICT_SCHEMA mode silently.
+- You want a wall-time estimate before launching a long calibration.
+
+You don't need it when you're on stock frontier-tier providers with declared defaults — `omegaprompt` runs fine without probes there.
+
+## Trust loop (no network)
+
+These commands run entirely offline (no provider/API keys). They are also the commands that `scripts/release_audit.py` enforces — keeping local CI and release gate in lockstep.
+
+```bash
+python -m pip install -e ".[dev,mcp]"
+python -m pytest -q
+python scripts/generate_readme_claims.py --check
+python scripts/check_repo_consistency.py
+python examples/demo_replay.py
+python scripts/run_golden_cases.py --check
+python scripts/verify_fixture_integrity.py
+python scripts/release_audit.py --no-network
+```
+
+### Deterministic demo (one command, no API keys)
+
+```bash
+python examples/demo_replay.py
+```
+
+Replays `empirical_preflight` against a scripted fake judge; the output is byte-for-byte equal to `examples/_demo_output.txt` (verified by `tests/test_demo_replay.py`). Use this as the "did I break the warning surface?" smoke test.
+
+## How is this different?
+
+| Capability | `mini-omega-lock` (this) | `mini-antemortem-cli` | `omegaprompt` default preflight | Ad-hoc provider smoke test |
+|---|---|---|---|---|
+| Live empirical judge probe (production) | yes — scripted/mocked in tests | no (analytical) | no (declared defaults) | varies |
+| Judge consistency / gate-flip measurement | `measure_judge_consistency`, `measure_gate_flip_rate` | not in scope | not in scope | ad-hoc |
+| Strict-schema reliability measurement | `probe_strict_schema`; **fail-closed at 0.0** when probe not supplied | not in scope | not in scope | typically pass/fail, no rate |
+| Context margin | `compute_context_margin` (chars heuristic) + `compute_context_margin_from_texts` (tokenizer-exact) | analytical estimate | partial | ad-hoc |
+| Latency projection | yes — reuses consistency-probe wall time | no | no | ad-hoc |
+| Noise floor | caller-supplied `fitness_samples`; **fail-closed** otherwise | no | no | no |
+| Offline testability | default `pytest -q` is fully offline | deterministic by construction | yes | typically not |
+| Emits `omegaprompt.preflight.PreflightReport` shape | yes | yes | source of truth | partial |
+| What it does **not** prove | model quality, provider reliability under load, production adoption, external validation | same | same | same |
+| Analytical trap classification | not in scope — use `mini-antemortem-cli` | yes | no | no |
+
+Boundary in one line: this package's empirical probes measure a narrow preflight surface (judge / endpoint / context / latency / noise floor); they are not benchmarks of model quality or proofs of production readiness. See [docs/trust_model.md](docs/trust_model.md) and [docs/toolkit_positioning.md](docs/toolkit_positioning.md) for the full boundary, and [docs/claim_ledger.md](docs/claim_ledger.md) for the per-claim source-of-truth mapping.
+
+> **Looking for the analytical (no-API, deterministic) preflight?** See sibling tool [`mini-antemortem-cli`](https://pypi.org/project/mini-antemortem-cli/) — same plugin interface, deterministic rule-based classifier instead of LLM probes.
+
+> **MCP server.** This package also exposes six probes (`empirical_preflight`, `measure_judge_consistency`, `measure_gate_flip_rate`, `compute_context_margin`, `noise_floor_estimate`, `project_performance`) as agent-callable MCP tools — see [docs/generated/claims.md](docs/generated/claims.md) for the regenerated tool list. Install with `pip install "mini-omega-lock[mcp]"` then run `python -m mini_omega_lock.mcp` (stdio, default for Claude Code). See [AGENT_TRIGGERS.md scenario 2](https://github.com/hibou04-ops/omegaprompt/blob/main/AGENT_TRIGGERS.md#scenario-2--pre-calibration-sanity-check).
 
 ---
 

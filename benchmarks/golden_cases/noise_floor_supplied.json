@@ -1,0 +1,22 @@
+{
+  "name": "noise_floor_supplied",
+  "description": "fitness_samples=[0.0, 2.0]: population stdev is exactly 1.0 — no warning, value populated.",
+  "inputs": {
+    "scripted_scores": [4, 4, 4],
+    "consistency_repeats": 3,
+    "include_schema_probe": true,
+    "schema_probe_outcomes": ["ok", "ok", "ok"],
+    "fitness_samples": [0.0, 2.0],
+    "monotonic_examples": true,
+    "token_counter": "approx",
+    "system_prompts": ["You are a judge."]
+  },
+  "expected": {
+    "performance": {
+      "noise_floor": 1.0
+    },
+    "warnings_contains_none_of": [
+      "noise_floor not measured"
+    ]
+  }
+}

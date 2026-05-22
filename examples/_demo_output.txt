@@ -39,6 +39,7 @@ AdaptationPlan:
   overrides = [{'parameter': 'schema_mode', 'default': 'strict_schema', 'applied': 'json_object', 'reason': 'STRICT_SCHEMA reliability 0% below 90% - fallback to JSON_OBJECT with post-parse validation'}]
   preserves_discipline = True
   rationale = ['schema_mode STRICT_SCHEMA -> JSON_OBJECT (reliability 0%)']
+  require_manual_review_reasons = []
   rescore_count = 1
   rubric_weight_overrides = {}
   schema_mode_fallback = 'json_object'

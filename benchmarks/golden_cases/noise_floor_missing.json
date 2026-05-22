@@ -1,0 +1,21 @@
+{
+  "name": "noise_floor_missing",
+  "description": "fitness_samples omitted: noise_floor defaults to 0.0 with an explicit warning.",
+  "inputs": {
+    "scripted_scores": [4, 4, 4],
+    "consistency_repeats": 3,
+    "include_schema_probe": true,
+    "schema_probe_outcomes": ["ok", "ok", "ok"],
+    "monotonic_examples": true,
+    "token_counter": "approx",
+    "system_prompts": ["You are a judge."]
+  },
+  "expected": {
+    "performance": {
+      "noise_floor": 0.0
+    },
+    "warnings_contains_all_of": [
+      "noise_floor not measured"
+    ]
+  }
+}

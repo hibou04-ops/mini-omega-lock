@@ -12,7 +12,10 @@ If you're running omegaprompt with provider/endpoint/judge defaults and nothing 
 - Your local/cloud endpoint sometimes rejects strict schema.
 - You want to know how long a full calibration will take *before* running it.
 
-## What it measures (5 probes)
+## What it measures (5 measurement categories; 6 MCP tools)
+
+> The five categories below are the **conceptual** probe surface — judge / endpoint / context / latency / noise floor. The MCP server exposes them as **6 tools** because hard-gate flip rate (`measure_gate_flip_rate`) is wired as its own tool under the judge category. The canonical tool list lives in [docs/generated/claims.md](docs/generated/claims.md).
+
 
 | Probe | What it tells you | Default cost |
 |---|---|---|
@@ -64,20 +67,21 @@ plan   = derive_adaptation_plan(report=report)
 
 That's it. 4 live API calls. `plan` tells omegaprompt what to adjust. The `warnings` list names every field that fell back to a fail-closed default — treat it as load-bearing in CI.
 
-## The 6 exported functions
+## Exported functions
+
+The full public API lives in `mini_omega_lock.__all__`; the regenerated list is in [docs/generated/claims.md](docs/generated/claims.md). The five most common entry points:
 
 ```python
 from mini_omega_lock import (
-    empirical_preflight,            # composite: runs all probes, returns 3-tuple
+    empirical_preflight,            # composite: runs all probes, returns 4-tuple incl. warnings
     measure_judge_consistency,      # individual: returns (JudgeQualityMeasurement, raw scores)
     probe_strict_schema,            # individual: returns EndpointMeasurement
-    compute_context_margin,         # pure compute: returns float
-    project_performance,            # pure compute: returns PerformanceMeasurement
+    compute_context_margin,         # pure compute: returns float (chars heuristic)
     noise_floor_estimate,           # pure compute: returns float stdev
 )
 ```
 
-Use `empirical_preflight` for the default flow. Call the individuals if you want finer control (e.g., compute noise floor from your own fitness samples across multiple calibration runs).
+Also exported and equally importable: `compute_context_margin_from_texts` (tokenizer-exact variant), `measure_gate_flip_rate`, `measure_scale_monotonicity`, `project_performance`. Use `empirical_preflight` for the default flow; call the individuals when you want finer control (e.g., compute noise floor from your own fitness samples across multiple calibration runs).
 
 ## When to use it
 

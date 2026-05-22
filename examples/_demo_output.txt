@@ -1,0 +1,48 @@
+=== mini-omega-lock deterministic demo replay ===
+Inputs:
+  judge          = LLMJudge(provider=_DeterministicProvider())
+  consistency_repeats = 3
+  schema probe        = not supplied (fail-closed expected)
+  monotonic_examples  = not supplied (fail-closed expected)
+  token_counter       = not supplied (heuristic path)
+  fitness_samples     = not supplied (fail-closed expected)
+
+JudgeQualityMeasurement:
+  anchoring_usage = 0.0
+  consistency = 1.0
+  samples = 3
+  scale_monotonic = False
+
+EndpointMeasurement:
+  caching_active = False
+  context_budget_margin = 0.9997203947368422
+  schema_reliability = 0.0
+  silent_degradation_detected = False
+
+PerformanceMeasurement:
+  mean_call_latency_ms = '<masked: timing>'
+  noise_floor = 0.0
+  projected_wall_time_seconds = '<masked: timing>'
+
+Warnings (4):
+  - judge_quality.scale_monotonic not measured — pass monotonic_examples=[(bad_item, bad_resp), ..., (good_item, good_resp)] to verify bad < mid < good ordering. Defaulted to False (fail-closed).
+  - endpoint.schema_reliability not measured — strict_schema_provider, strict_schema_output, and strict_schema_probes were not supplied; value defaulted to 0.0 (fail-closed). Pass these to actually probe the provider's strict-schema reliability.
+  - endpoint.context_budget_margin uses the chars_per_token=3.8 heuristic — pass token_counter=<tokenizer> for a measurement.
+  - performance.noise_floor not measured — pass fitness_samples=[...] (>= 2 samples from repeated evaluations at fixed params) to compute it. Adaptive min_kc4 logic in derive_adaptation_plan needs this signal to widen safely.
+
+AdaptationPlan:
+  candidate_budget_cap = None
+  dataset_reorder_for_cache = False
+  judge_ensemble_shift = None
+  max_gap_override = None
+  min_kc4_override = None
+  overrides = [{'parameter': 'schema_mode', 'default': 'strict_schema', 'applied': 'json_object', 'reason': 'STRICT_SCHEMA reliability 0% below 90% - fallback to JSON_OBJECT with post-parse validation'}]
+  preserves_discipline = True
+  rationale = ['schema_mode STRICT_SCHEMA -> JSON_OBJECT (reliability 0%)']
+  rescore_count = 1
+  rubric_weight_overrides = {}
+  schema_mode_fallback = 'json_object'
+  skip_axes = []
+  unlock_k_override = None
+
+=== end demo ===

@@ -5,9 +5,16 @@ on:
     branches: [main]
   pull_request:
 
+# Hardening notes:
+# - No live provider/API secrets are referenced anywhere in this workflow.
+# - No publish step lives in this file; release-audit and publish-readiness
+#   verify the pre-publish surface but never call twine.
+# - The matrix mirrors the supported Python + OS surface declared in
+#   pyproject.toml `classifiers` and `requires-python`.
+
 jobs:
   test:
-    name: pytest (${{ matrix.os }}, py${{ matrix.python-version }})
+    name: pytest + audit (${{ matrix.os }}, py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -22,9 +29,58 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
-      - name: Install package + test deps
+      - name: Install package + test + mcp extras
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev,mcp]"
       - name: Run pytest
         run: python -m pytest -q
+      - name: Generated claims drift
+        run: python scripts/generate_readme_claims.py --check
+      - name: Repository consistency
+        run: python scripts/check_repo_consistency.py
+      - name: Demo replay (no network)
+        run: python examples/demo_replay.py
+      - name: Demo replay diff
+        run: python -m pytest -q tests/test_demo_replay.py
+      - name: Golden cases
+        run: python scripts/run_golden_cases.py --check
+      - name: Fixture integrity
+        run: python scripts/verify_fixture_integrity.py
+      - name: Release audit (no network)
+        run: python scripts/release_audit.py --no-network
+
+  build:
+    name: wheel build + smoke (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install build tooling (no project deps)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build
+      - name: Build wheel + sdist
+        run: python -m build
+      - name: Locate wheel
+        id: locate
+        shell: python
+        run: |
+          import glob, os
+          matches = sorted(glob.glob('dist/*.whl'))
+          if not matches:
+              raise SystemExit('no wheel produced under dist/')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as fh:
+              fh.write(f'wheel={matches[-1]}\n')
+      - name: Wheel smoke install
+        run: python scripts/wheel_smoke_install.py "${{ steps.locate.outputs.wheel }}"

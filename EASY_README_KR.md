@@ -12,7 +12,10 @@ Omegaprompt 기본 provider/endpoint/judge 로 돌리는데 아무 문제 없으
 - Local/cloud 엔드포인트가 strict schema 를 가끔 거부.
 - 전체 calibration 이 얼마나 걸릴지 *실행 전*에 알고 싶음.
 
-## 측정하는 것 (5개 probe)
+## 측정하는 것 (5개 측정 카테고리; 6개 MCP 도구)
+
+> 아래 5개 카테고리는 **개념상** probe 표면 — judge / endpoint / context / latency / noise floor. MCP 서버는 hard-gate flip rate (`measure_gate_flip_rate`)를 judge 카테고리 산하의 별도 도구로 노출하므로 실제 등록된 **MCP 도구는 6개**입니다. 정식 도구 목록은 [docs/generated/claims_kr.md](docs/generated/claims_kr.md).
+
 
 | Probe | 뭘 알려주나 | 기본 비용 |
 |---|---|---|
@@ -64,20 +67,21 @@ plan   = derive_adaptation_plan(report=report)
 
 끝. Live API 호출 4번. `plan`이 omegaprompt에 뭘 조정할지 알려줌. `warnings` 리스트는 fail-closed 기본값으로 떨어진 필드를 모두 명시하므로 CI에서는 load-bearing 으로 다뤄야 함.
 
-## 6개 export 함수
+## Export 함수
+
+전체 public API는 `mini_omega_lock.__all__`에 정의되어 있고, 재생성된 목록은 [docs/generated/claims_kr.md](docs/generated/claims_kr.md)에 있습니다. 가장 자주 쓰는 5개 진입점:
 
 ```python
 from mini_omega_lock import (
-    empirical_preflight,            # 복합: 모든 probe 실행, 3-tuple 리턴
+    empirical_preflight,            # 복합: 모든 probe 실행, warnings 포함 4-tuple 리턴
     measure_judge_consistency,      # 개별: (JudgeQualityMeasurement, raw 점수)
     probe_strict_schema,            # 개별: EndpointMeasurement 리턴
-    compute_context_margin,         # 순수 계산: float 리턴
-    project_performance,            # 순수 계산: PerformanceMeasurement 리턴
+    compute_context_margin,         # 순수 계산: float 리턴 (chars heuristic)
     noise_floor_estimate,           # 순수 계산: float stdev 리턴
 )
 ```
 
-기본 플로우는 `empirical_preflight`. 세밀한 제어가 필요하면 개별 호출 (예: 다수 calibration run 의 fitness sample 로 noise floor 계산).
+`__all__`에 함께 export되는 항목: `compute_context_margin_from_texts` (tokenizer-exact 변형), `measure_gate_flip_rate`, `measure_scale_monotonicity`, `project_performance`. 기본 플로우는 `empirical_preflight`. 세밀한 제어가 필요하면 개별 호출 (예: 다수 calibration run 의 fitness sample 로 noise floor 계산).
 
 ## 쓸 때
 

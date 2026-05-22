@@ -1,0 +1,21 @@
+{
+  "name": "token_counter_heuristic",
+  "description": "token_counter omitted: chars-per-token heuristic path is used; warning surfaces the approximation.",
+  "inputs": {
+    "scripted_scores": [4, 4, 4],
+    "consistency_repeats": 3,
+    "include_schema_probe": true,
+    "schema_probe_outcomes": ["ok", "ok", "ok"],
+    "fitness_samples": [0.0, 2.0],
+    "monotonic_examples": true
+  },
+  "expected": {
+    "endpoint": {
+      "schema_reliability": 1.0,
+      "context_budget_margin_sign": "positive"
+    },
+    "warnings_contains_all_of": [
+      "chars_per_token"
+    ]
+  }
+}

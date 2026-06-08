@@ -73,7 +73,10 @@ jobs:
           python examples/demo_replay.py
           python scripts/run_golden_cases.py --check
           python scripts/verify_fixture_integrity.py
-          python scripts/release_audit.py --no-network
+          # NOTE: release_audit.py is a PRE-TAG gate -- it refuses when the version's
+          # git tag already exists. It runs in ci.yml on every push/PR. This publish
+          # job checks out AT the tag, so the at-tag gate here is publish_readiness.py
+          # (below). Do not add release_audit.py to this step.
 
       - name: Build distributions
         run: python -m build

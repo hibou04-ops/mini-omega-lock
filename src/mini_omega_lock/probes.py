@@ -13,11 +13,11 @@ behaviour (``schema_reliability=1.0`` with no warning when no probe was
 run) silently produced false-safe outcomes. Callers who want the old
 fabricated-success behaviour can read the warnings list and override.
 
-The full ``mini-omega-lock`` project exposes this surface at the
-`omega_lock.preflight` level and is domain-agnostic (works against any
-`CalibrableTarget`). The version in this module is in-process and
-prompt-specific; it is the minimum the core pipeline needs to stand
-alone.
+The broader sibling project, omega-lock (parameter-calibration
+framework), tackles the domain-agnostic calibration surface (it works
+against any ``CalibrableTarget``). The version in this module is
+in-process and prompt-specific; it is the minimum the core pipeline
+needs to stand alone.
 """
 
 from __future__ import annotations
@@ -250,6 +250,7 @@ def probe_strict_schema(
         )
     successes = 0
     total = 0
+    none_count = 0
     for base_req in probes:
         total += 1
         req = base_req.model_copy(
@@ -262,6 +263,16 @@ def probe_strict_schema(
             resp = provider.call(req)
             if resp.parsed is not None:
                 successes += 1
+            else:
+                # A response that came back WITHOUT raising ProviderError
+                # but with parsed=None is a *silent* degradation: the
+                # endpoint accepted the strict-schema request, returned
+                # 200-shaped output, yet produced nothing parseable. This
+                # is exactly the false-safe the package exists to catch —
+                # it is NOT the same as an explicit ProviderError (which
+                # is a loud, expected failure already reflected in the
+                # reliability rate).
+                none_count += 1
         except ProviderError:
             continue
     reliability = successes / total
@@ -269,7 +280,11 @@ def probe_strict_schema(
         schema_reliability=reliability,
         context_budget_margin=1.0,  # filled in separately
         caching_active=False,
-        silent_degradation_detected=False,
+        # Flip to True only when at least one probe silently returned
+        # parsed=None without raising. The unprobed / fail-closed path in
+        # empirical_preflight keeps this False but warns that degradation
+        # was not probed.
+        silent_degradation_detected=none_count > 0,
     )
 
 
@@ -597,11 +612,22 @@ def empirical_preflight(
             output_schema=strict_schema_output,
             probes=strict_schema_probes,
         )
+        if endpoint.silent_degradation_detected:
+            warnings.append(
+                "endpoint.silent_degradation_detected = True — at least one "
+                "strict-schema probe returned parsed=None WITHOUT raising a "
+                "ProviderError. The endpoint accepted the request but produced "
+                "unparseable output (a silent capability degradation). Treat "
+                "schema_reliability as suspect and inspect the raw responses."
+            )
     else:
         endpoint = EndpointMeasurement(
             schema_reliability=0.0,  # fail-closed: unmeasured != good
             context_budget_margin=1.0,  # filled in below
             caching_active=False,
+            # Fail-closed: with no probe we cannot observe silent
+            # degradation. Keep False but warn it was NOT probed, so an
+            # agent never reads "False" as "measured: no degradation".
             silent_degradation_detected=False,
         )
         warnings.append(
@@ -609,6 +635,12 @@ def empirical_preflight(
             "strict_schema_output, and strict_schema_probes were not supplied; "
             "value defaulted to 0.0 (fail-closed). Pass these to actually "
             "probe the provider's strict-schema reliability."
+        )
+        warnings.append(
+            "endpoint.silent_degradation_detected = False but schema degradation "
+            "not probed — no strict-schema probe was run, so a parsed=None "
+            "silent degradation could not be observed. The False here means "
+            "'not measured', not 'measured: clean'."
         )
 
     # Context budget - computed from the probe content sizes.

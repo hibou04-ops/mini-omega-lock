@@ -6,7 +6,7 @@
     "monotonicity_not_supplied.json": "b18c5263bd9950ce3c2b0c8b86bd62cfc92ba3a7c8143dda09dbcdd3f2d3f8e2",
     "noise_floor_missing.json": "3754ae6c7c278ec7f2dfe71ac2d43f93006be51ae83a2cce319308fa93b1b48c",
     "noise_floor_supplied.json": "70385d2a8d787f1e5a5ea155238c6305592c7e40b46b2bbab74b39ed2f88b65f",
-    "strict_schema_failure.json": "262466baca065951ec14b68a1c488609b86d2632bf4baf10761941c9252a22e8",
+    "strict_schema_failure.json": "e24c210c5a493005a39c7c0ad7dbc501e824b9cedf23e07106c7dfdc1598f5e5",
     "token_counter_exact.json": "634312b78e67ef11ae65547fc04e55bfde51298fa143fccd155b1fab2d02459d",
     "token_counter_heuristic.json": "17214e285bcbeb820c64700ad374e4d1afe4a66d28d75d885110a02269259753"
   },

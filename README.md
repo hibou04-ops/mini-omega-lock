@@ -3,7 +3,7 @@
 > **Empirical preflight probes for [omegaprompt](https://pypi.org/project/omegaprompt/) calibration.** Measures judge consistency, endpoint schema reliability, context-budget margin, latency, and noise floor — emits `PreflightReport` records that omegaprompt's `derive_adaptation_plan` consumes.
 
 [![CI](https://github.com/hibou04-ops/mini-omega-lock/actions/workflows/ci.yml/badge.svg)](https://github.com/hibou04-ops/mini-omega-lock/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/badge/pypi-0.5.0-blue.svg)](https://pypi.org/project/mini-omega-lock/)
+[![PyPI](https://img.shields.io/badge/pypi-0.6.0-blue.svg)](https://pypi.org/project/mini-omega-lock/)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org)
 [![Parent](https://img.shields.io/badge/parent-omegaprompt%E2%89%A51.1.0-blueviolet.svg)](https://pypi.org/project/omegaprompt/)
@@ -36,6 +36,16 @@ Sibling projects: [omegaprompt](https://github.com/hibou04-ops/omegaprompt) (cal
 - You want a wall-time estimate before launching a long calibration.
 
 You don't need it when you're on stock frontier-tier providers with declared defaults — `omegaprompt` runs fine without probes there.
+
+## What's new in 0.6.0
+
+- **Release infrastructure (`publish.yml`).** Trusted-publishing GitHub workflow (the deterministic gauntlet + build + wheel smoke + readiness gate, then a PyPI publish job under the `pypi` environment with OIDC).
+- **Silent-degradation signal (C2).** `probe_strict_schema` now flags `silent_degradation_detected=True` when a strict-schema probe returns `parsed=None` *without* raising a `ProviderError` — a silent endpoint degradation that previously looked like a normal parse miss. The fail-closed/unprobed path keeps it `False` but warns that degradation was not probed.
+- **`preflight` CLI (H1).** A `preflight` console script wraps `empirical_preflight()` + `derive_adaptation_plan()` with `--json` / `--jsonl` / `--text` output. It exits non-zero when any field fell back to a fail-closed default (mirrors the library's fail-closed semantics for CI). An unavailable `--token-counter` raises rather than silently using the heuristic.
+- **Doc-citation fix (M5).** Corrected a stale docstring that cited a non-existent `omega_lock.preflight` API; it now references omega-lock (the parameter-calibration framework), a level that actually exists.
+- **Complete MCP surface (H2).** Four new MCP tools (`measure_scale_monotonicity`, `probe_strict_schema`, `compute_context_margin_from_texts`, `derive_adaptation_plan`) and four new `empirical_preflight` MCP params (`monotonic_examples`, `token_counter`, `system_prompts`, `gate_flip_repeats`). Tokenizer dispatch fails loud — an unavailable tokenizer raises, never silently falls back to the chars/token heuristic.
+
+Development Status stays `3 - Alpha`; `4 - Beta` is the next release, once the CLI/MCP surface freezes.
 
 ## Trust loop (no network)
 
@@ -79,7 +89,7 @@ Boundary in one line: this package's empirical probes measure a narrow preflight
 
 > **Looking for the analytical (no-API, deterministic) preflight?** See sibling tool [`mini-antemortem-cli`](https://pypi.org/project/mini-antemortem-cli/) — same plugin interface, deterministic rule-based classifier instead of LLM probes.
 
-> **MCP server.** This package also exposes six probes (`empirical_preflight`, `measure_judge_consistency`, `measure_gate_flip_rate`, `compute_context_margin`, `noise_floor_estimate`, `project_performance`) as agent-callable MCP tools — see [docs/generated/claims.md](docs/generated/claims.md) for the regenerated tool list. Install with `pip install "mini-omega-lock[mcp]"` then run `python -m mini_omega_lock.mcp` (stdio, default for Claude Code). See [AGENT_TRIGGERS.md scenario 2](https://github.com/hibou04-ops/omegaprompt/blob/main/AGENT_TRIGGERS.md#scenario-2--pre-calibration-sanity-check).
+> **MCP server.** This package also exposes ten tools (`empirical_preflight`, `measure_judge_consistency`, `measure_gate_flip_rate`, `measure_scale_monotonicity`, `probe_strict_schema`, `compute_context_margin`, `compute_context_margin_from_texts`, `noise_floor_estimate`, `project_performance`, `derive_adaptation_plan`) as agent-callable MCP tools — see [docs/generated/claims.md](docs/generated/claims.md) for the regenerated tool list. Install with `pip install "mini-omega-lock[mcp]"` then run `python -m mini_omega_lock.mcp` (stdio, default for Claude Code). See [AGENT_TRIGGERS.md scenario 2](https://github.com/hibou04-ops/omegaprompt/blob/main/AGENT_TRIGGERS.md#scenario-2--pre-calibration-sanity-check).
 
 ---
 

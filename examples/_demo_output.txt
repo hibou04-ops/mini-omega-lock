@@ -24,9 +24,10 @@ PerformanceMeasurement:
   noise_floor = 0.0
   projected_wall_time_seconds = '<masked: timing>'
 
-Warnings (4):
+Warnings (5):
   - judge_quality.scale_monotonic not measured — pass monotonic_examples=[(bad_item, bad_resp), ..., (good_item, good_resp)] to verify bad < mid < good ordering. Defaulted to False (fail-closed).
   - endpoint.schema_reliability not measured — strict_schema_provider, strict_schema_output, and strict_schema_probes were not supplied; value defaulted to 0.0 (fail-closed). Pass these to actually probe the provider's strict-schema reliability.
+  - endpoint.silent_degradation_detected = False but schema degradation not probed — no strict-schema probe was run, so a parsed=None silent degradation could not be observed. The False here means 'not measured', not 'measured: clean'.
   - endpoint.context_budget_margin uses the chars_per_token=3.8 heuristic — pass token_counter=<tokenizer> for a measurement.
   - performance.noise_floor not measured — pass fitness_samples=[...] (>= 2 samples from repeated evaluations at fixed params) to compute it. Adaptive min_kc4 logic in derive_adaptation_plan needs this signal to widen safely.
 

@@ -15,6 +15,7 @@ from omegaprompt.domain.judge import Dimension, HardGate, JudgeResult, JudgeRubr
 from omegaprompt.judges.llm_judge import LLMJudge
 from mini_omega_lock.probes import (
     compute_context_margin,
+    empirical_preflight,
     measure_judge_consistency,
     noise_floor_estimate,
     probe_strict_schema,
@@ -248,3 +249,121 @@ def test_noise_floor_positive_when_samples_vary():
 def test_noise_floor_zero_when_too_few_samples():
     assert noise_floor_estimate(fitness_samples=[0.85]) == 0.0
     assert noise_floor_estimate(fitness_samples=[]) == 0.0
+
+
+# --------------------------- C2: silent degradation -----------------------
+#
+# A strict-schema probe that returns parsed=None WITHOUT raising a
+# ProviderError is a *silent* capability degradation: the endpoint
+# accepted the request, returned 200-shaped output, yet produced nothing
+# parseable. probe_strict_schema must surface this via
+# EndpointMeasurement.silent_degradation_detected (consumed downstream by
+# omegaprompt.preflight.adaptation). Pre-fix it was hardcoded False.
+
+
+def test_probe_strict_schema_sets_silent_degradation_on_parsed_none():
+    """RED-if-hardcoded guard: one parsed=None outcome (no ProviderError)
+    MUST flip silent_degradation_detected to True.
+
+    This is the assertion that would FAIL if the field were still the
+    pre-fix hardcoded ``silent_degradation_detected=False``.
+    """
+    provider = MagicMock()
+    provider.call.side_effect = [
+        ProviderResponse(
+            parsed=JudgeResult(scores={"accuracy": 4}, gate_results={"no_refusal": True}),
+            usage={},
+        ),
+        ProviderResponse(parsed=None, usage={}),  # silent degradation
+    ]
+    m = probe_strict_schema(
+        provider=provider,
+        output_schema=JudgeResult,
+        probes=[_strict_request_ok(), _strict_request_ok()],
+    )
+    assert m.silent_degradation_detected is True
+    # schema_reliability still reflects the 1/2 parse-success rate.
+    assert m.schema_reliability == pytest_approx(0.5)
+
+
+def test_probe_strict_schema_no_silent_degradation_when_all_parse():
+    """A clean run (all parsed, or explicit ProviderError) must NOT flag
+    silent degradation — ProviderError is a loud failure, not silent."""
+    provider = MagicMock()
+    provider.call.side_effect = [
+        ProviderResponse(
+            parsed=JudgeResult(scores={"accuracy": 4}, gate_results={"no_refusal": True}),
+            usage={},
+        ),
+        ProviderError("loud failure"),  # explicit error, not silent
+    ]
+    m = probe_strict_schema(
+        provider=provider,
+        output_schema=JudgeResult,
+        probes=[_strict_request_ok(), _strict_request_ok()],
+    )
+    assert m.silent_degradation_detected is False
+
+
+def test_empirical_preflight_warns_on_silent_degradation():
+    """When the schema probe runs and observes a parsed=None outcome,
+    empirical_preflight flips the field True and emits a warning."""
+
+    class _NoneOnSecondProvider:
+        name = "anthropic"
+        model = "scripted"
+
+        def __init__(self):
+            self._n = 0
+
+        def call(self, request):
+            self._n += 1
+            if self._n == 2:
+                return ProviderResponse(parsed=None, usage={})
+            return ProviderResponse(
+                parsed=JudgeResult(scores={"accuracy": 4}, gate_results={"no_refusal": True}),
+                usage={},
+                latency_ms=5.0,
+            )
+
+        def capabilities(self):
+            from omegaprompt.providers.base import CapabilityTier, ProviderCapabilities
+
+            return ProviderCapabilities(
+                provider="anthropic",
+                tier=CapabilityTier.CLOUD,
+                supports_strict_schema=True,
+                supports_llm_judge=False,
+                ship_grade_judge=False,
+            )
+
+    judge = LLMJudge(provider=_ScriptedJudgeProvider(scores=[4, 4, 4]))
+    _, endpoint, _, warnings = empirical_preflight(
+        judge=judge,
+        rubric=_rubric(),
+        probe_item=_probe_item(),
+        probe_response="4",
+        consistency_repeats=1,
+        strict_schema_provider=_NoneOnSecondProvider(),
+        strict_schema_output=JudgeResult,
+        strict_schema_probes=[_strict_request_ok(), _strict_request_ok()],
+    )
+    assert endpoint.silent_degradation_detected is True
+    assert any("silent_degradation_detected = True" in w for w in warnings)
+
+
+def test_empirical_preflight_unprobed_path_warns_not_probed():
+    """Fail-closed/unprobed path: no schema probe supplied. The field
+    stays False BUT a warning must say degradation was NOT probed, so
+    'False' is never misread as 'measured: clean'."""
+    judge = LLMJudge(provider=_ScriptedJudgeProvider(scores=[4, 4, 4]))
+    _, endpoint, _, warnings = empirical_preflight(
+        judge=judge,
+        rubric=_rubric(),
+        probe_item=_probe_item(),
+        probe_response="4",
+        consistency_repeats=1,
+        # No strict_schema_* args -> fail-closed path.
+    )
+    assert endpoint.silent_degradation_detected is False
+    assert any("schema degradation" in w and "not probed" in w for w in warnings)

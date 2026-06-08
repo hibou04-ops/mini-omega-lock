@@ -17,6 +17,7 @@ hits the network). Pass ``--quiet`` to suppress step-by-step output.
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -89,18 +90,24 @@ def _check_no_release_markers() -> list[str]:
     version = _read_version()
     tag = f"v{version}"
 
-    # 1. Local git tag.
-    result = subprocess.run(
-        ["git", "tag", "-l", tag],
-        capture_output=True,
-        text=True,
-        cwd=REPO_ROOT,
-    )
-    if result.returncode == 0 and result.stdout.strip() == tag:
-        issues.append(
-            f"local git tag {tag!r} already exists — release appears to have "
-            "been performed; audit refuses to greenlight publish"
+    # 1. Local git tag. This is a PRE-TAG safety: locally (and in ci.yml's
+    #    push/PR checkout, which fetches no tags) the version's tag must not yet
+    #    exist. The trusted-publishing publish workflow, however, checks out AT
+    #    the tag (so the tag necessarily exists) and gates on this same audit via
+    #    publish_readiness.py — there the check is inverted and must be skipped.
+    #    MINI_OMEGA_LOCK_RELEASE_WORKFLOW is set only by that workflow.
+    if not os.environ.get("MINI_OMEGA_LOCK_RELEASE_WORKFLOW"):
+        result = subprocess.run(
+            ["git", "tag", "-l", tag],
+            capture_output=True,
+            text=True,
+            cwd=REPO_ROOT,
         )
+        if result.returncode == 0 and result.stdout.strip() == tag:
+            issues.append(
+                f"local git tag {tag!r} already exists — release appears to have "
+                "been performed; audit refuses to greenlight publish"
+            )
 
     # 2. dist/ contents must be a subset of {wheel, sdist} for the current
     #    version. Unknown artifacts (e.g. a different version, a draft, a

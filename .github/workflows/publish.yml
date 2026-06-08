@@ -15,12 +15,6 @@ jobs:
   verify-build:
     name: verify and build
     runs-on: ubuntu-latest
-    # This job checks out AT the release tag, so release_audit.py's pre-tag
-    # "tag already exists" guard would always trip. Tell the audit it is the
-    # release workflow so it skips ONLY that pre-tag check (every other audit
-    # check still runs). release_audit runs here via publish_readiness.py.
-    env:
-      MINI_OMEGA_LOCK_RELEASE_WORKFLOW: "1"
     outputs:
       release_tag: ${{ steps.release-ref.outputs.release_tag }}
     steps:
@@ -81,8 +75,8 @@ jobs:
           python scripts/verify_fixture_integrity.py
           # release_audit.py is intentionally NOT a separate step here: it runs via
           # publish_readiness.py below (and in ci.yml on push/PR). Its pre-tag
-          # "tag already exists" check is skipped in this workflow via the job-level
-          # MINI_OMEGA_LOCK_RELEASE_WORKFLOW env.
+          # "tag already exists" check is skipped only in the Publish readiness gate
+          # step, which sets MINI_OMEGA_LOCK_RELEASE_WORKFLOW for that step alone.
 
       - name: Build distributions
         run: python -m build
@@ -91,6 +85,12 @@ jobs:
         run: python scripts/wheel_smoke_install.py dist/*.whl
 
       - name: Publish readiness gate
+        # release_audit (run by publish_readiness) checks out AT the tag, where its
+        # pre-tag "tag already exists" guard must be skipped. Scope the env to THIS
+        # step only, so the deterministic-verification pytest step above still runs
+        # the guard at full strength.
+        env:
+          MINI_OMEGA_LOCK_RELEASE_WORKFLOW: "1"
         run: python scripts/publish_readiness.py --no-network
 
       - uses: actions/upload-artifact@v4

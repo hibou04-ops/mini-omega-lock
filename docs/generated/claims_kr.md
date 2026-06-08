@@ -14,8 +14,8 @@
 | GitHub 저장소 | `hibou04-ops/mini-omega-lock` |
 | PyPI 배포 이름 | `mini-omega-lock` |
 | Python import 패키지명 | `mini_omega_lock` |
-| 패키지 버전 (`pyproject.toml`) | `0.6.0` |
-| 패키지 버전 (`__init__.__version__`) | `0.6.0` |
+| 패키지 버전 (`pyproject.toml`) | `0.6.1` |
+| 패키지 버전 (`__init__.__version__`) | `0.6.1` |
 | 지원 Python | `>=3.11` |
 | 런타임 의존성 | `omegaprompt>=1.1.0`, `pydantic>=2.6.0` |
 | Optional extras | `dev` = `pytest>=8.0.0`; `mcp` = `mcp>=1.0.0` |
@@ -90,7 +90,7 @@ pip install -e ".[dev,mcp]"
 | Fixture 무결성 (SHA-256 manifest) | `python scripts/verify_fixture_integrity.py` |
 | Release 감사 (no-network) | `python scripts/release_audit.py --no-network` |
 | 휠 빌드 | `python -m build` |
-| 휠 smoke 설치 (임시 venv) | `python scripts/wheel_smoke_install.py dist/mini_omega_lock-0.6.0-py3-none-any.whl` |
+| 휠 smoke 설치 (임시 venv) | `python scripts/wheel_smoke_install.py dist/mini_omega_lock-0.6.1-py3-none-any.whl` |
 | Publish-readiness 게이트 (no-network) | `python scripts/publish_readiness.py --no-network` |
 | Post-release 검증 (no-network) | `python scripts/post_release_verify.py --no-network` |
 

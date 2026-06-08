@@ -12,6 +12,10 @@ If you're running omegaprompt with provider/endpoint/judge defaults and nothing 
 - Your local/cloud endpoint sometimes rejects strict schema.
 - You want to know how long a full calibration will take *before* running it.
 
+## What's new in 0.6.1
+
+- Release-workflow hardening (CI only). No package or behavior change vs 0.6.0 — the wheel/sdist are the same bar the version.
+
 ## What's new in 0.6.0
 
 - **`preflight` CLI** — run a check from the shell (`preflight --help`), no Python needed; exits non-zero when something couldn't be measured (CI-friendly).

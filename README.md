@@ -3,7 +3,7 @@
 > **Empirical preflight probes for [omegaprompt](https://pypi.org/project/omegaprompt/) calibration.** Measures judge consistency, endpoint schema reliability, context-budget margin, latency, and noise floor — emits `PreflightReport` records that omegaprompt's `derive_adaptation_plan` consumes.
 
 [![CI](https://github.com/hibou04-ops/mini-omega-lock/actions/workflows/ci.yml/badge.svg)](https://github.com/hibou04-ops/mini-omega-lock/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/badge/pypi-0.6.0-blue.svg)](https://pypi.org/project/mini-omega-lock/)
+[![PyPI](https://img.shields.io/badge/pypi-0.6.1-blue.svg)](https://pypi.org/project/mini-omega-lock/)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org)
 [![Parent](https://img.shields.io/badge/parent-omegaprompt%E2%89%A51.1.0-blueviolet.svg)](https://pypi.org/project/omegaprompt/)
@@ -36,6 +36,10 @@ Sibling projects: [omegaprompt](https://github.com/hibou04-ops/omegaprompt) (cal
 - You want a wall-time estimate before launching a long calibration.
 
 You don't need it when you're on stock frontier-tier providers with declared defaults — `omegaprompt` runs fine without probes there.
+
+## What's new in 0.6.1
+
+- **Release-workflow hardening (CI only).** The publish workflow now scopes the `release_audit` tag-skip env (`MINI_OMEGA_LOCK_RELEASE_WORKFLOW`) to the publish-readiness step alone rather than the whole job, so the deterministic-verification pytest step runs the pre-tag guard at full strength. No package or behavior change — the wheel/sdist are identical to 0.6.0 bar the version string.
 
 ## What's new in 0.6.0
 

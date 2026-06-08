@@ -3,7 +3,7 @@
 > **[omegaprompt](https://pypi.org/project/omegaprompt/) calibration을 위한 empirical preflight probes.** Judge consistency, endpoint schema reliability, context-budget margin, latency, noise floor를 측정해서 `PreflightReport` 레코드를 만들어 omegaprompt의 `derive_adaptation_plan`에 흘려줍니다.
 
 [![CI](https://github.com/hibou04-ops/mini-omega-lock/actions/workflows/ci.yml/badge.svg)](https://github.com/hibou04-ops/mini-omega-lock/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/badge/pypi-0.6.0-blue.svg)](https://pypi.org/project/mini-omega-lock/)
+[![PyPI](https://img.shields.io/badge/pypi-0.6.1-blue.svg)](https://pypi.org/project/mini-omega-lock/)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org)
 [![Parent](https://img.shields.io/badge/parent-omegaprompt%E2%89%A51.1.0-blueviolet.svg)](https://pypi.org/project/omegaprompt/)
@@ -32,6 +32,10 @@ pip install mini-omega-lock
 - 긴 calibration 실행 전에 wall-time 추정이 필요.
 
 Stock frontier-tier provider + 선언된 기본값으로 잘 돌아가는 경우 굳이 필요 없습니다.
+
+## 0.6.1에서 새로워진 것
+
+- **릴리스 워크플로 경화 (CI 전용).** publish 워크플로에서 `release_audit`의 tag-skip env(`MINI_OMEGA_LOCK_RELEASE_WORKFLOW`)를 job 전체가 아니라 publish-readiness 스텝으로만 좁혔습니다. 덕분에 deterministic-verification pytest 스텝은 pre-tag 가드를 full strength로 돌립니다. 패키지/동작 변경 없음 — wheel/sdist는 버전 문자열만 빼면 0.6.0과 동일합니다.
 
 ## 0.6.0에서 새로워진 것
 

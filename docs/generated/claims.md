@@ -14,8 +14,8 @@ These tables are regenerated from `pyproject.toml`, `src/mini_omega_lock/__init_
 | GitHub repository | `hibou04-ops/mini-omega-lock` |
 | PyPI distribution | `mini-omega-lock` |
 | Python import package | `mini_omega_lock` |
-| Package version (`pyproject.toml`) | `0.6.0` |
-| Package version (`__init__.__version__`) | `0.6.0` |
+| Package version (`pyproject.toml`) | `0.6.1` |
+| Package version (`__init__.__version__`) | `0.6.1` |
 | Requires Python | `>=3.11` |
 | Runtime dependencies | `omegaprompt>=1.1.0`, `pydantic>=2.6.0` |
 | Optional extras | `dev` = `pytest>=8.0.0`; `mcp` = `mcp>=1.0.0` |
@@ -90,7 +90,7 @@ pip install -e ".[dev,mcp]"
 | Fixture integrity (SHA-256 manifest) | `python scripts/verify_fixture_integrity.py` |
 | Release audit (no-network) | `python scripts/release_audit.py --no-network` |
 | Build wheel | `python -m build` |
-| Wheel smoke install (temp venv) | `python scripts/wheel_smoke_install.py dist/mini_omega_lock-0.6.0-py3-none-any.whl` |
+| Wheel smoke install (temp venv) | `python scripts/wheel_smoke_install.py dist/mini_omega_lock-0.6.1-py3-none-any.whl` |
 | Publish-readiness gate (no-network) | `python scripts/publish_readiness.py --no-network` |
 | Post-release verification (no-network) | `python scripts/post_release_verify.py --no-network` |
 

@@ -14,7 +14,8 @@
   "expected": {
     "endpoint": {
       "schema_reliability": 0.3333333333333333,
-      "context_budget_margin_sign": "positive"
+      "context_budget_margin_sign": "positive",
+      "silent_degradation_detected": true
     },
     "warnings_contains_none_of": [
       "schema_reliability not measured"

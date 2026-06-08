@@ -12,9 +12,16 @@ Omegaprompt 기본 provider/endpoint/judge 로 돌리는데 아무 문제 없으
 - Local/cloud 엔드포인트가 strict schema 를 가끔 거부.
 - 전체 calibration 이 얼마나 걸릴지 *실행 전*에 알고 싶음.
 
-## 측정하는 것 (5개 측정 카테고리; 6개 MCP 도구)
+## 0.6.0에서 새로워진 것
 
-> 아래 5개 카테고리는 **개념상** probe 표면 — judge / endpoint / context / latency / noise floor. MCP 서버는 hard-gate flip rate (`measure_gate_flip_rate`)를 judge 카테고리 산하의 별도 도구로 노출하므로 실제 등록된 **MCP 도구는 6개**입니다. 정식 도구 목록은 [docs/generated/claims_kr.md](docs/generated/claims_kr.md).
+- **`preflight` CLI** — 셸에서 바로 체크(`preflight --help`), Python 불필요; 측정 못 한 항목이 있으면 non-zero 종료(CI 친화적).
+- **Silent-degradation 신호** — 엔드포인트가 조용히 파싱 불가 출력을 반환하면 이제 무시하지 않고 표시.
+- **완성된 MCP 표면(10개 도구)** — 모든 probe + `derive_adaptation_plan` 도구가 agent 호출 가능.
+- 여전히 **3 - Alpha**; CLI/MCP 표면이 freeze되는 다음 릴리스에서 4 - Beta.
+
+## 측정하는 것 (5개 측정 카테고리; 10개 MCP 도구)
+
+> 아래 5개 카테고리는 **개념상** probe 표면 — judge / endpoint / context / latency / noise floor. MCP 서버는 여러 카테고리가 둘 이상의 probe를 가지므로 (예: hard-gate flip rate, scale monotonicity, tokenizer-exact context margin이 각각 별도 도구) 측정값을 plan으로 바꿔주는 `derive_adaptation_plan`까지 더해 실제 등록된 **MCP 도구는 10개**입니다. 정식 도구 목록은 [docs/generated/claims_kr.md](docs/generated/claims_kr.md).
 
 
 | Probe | 뭘 알려주나 | 기본 비용 |

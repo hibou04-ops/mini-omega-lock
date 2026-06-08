@@ -19,10 +19,13 @@ from mcp.server.fastmcp import FastMCP
 
 from mini_omega_lock import (
     compute_context_margin as _compute_context_margin,
+    compute_context_margin_from_texts as _compute_context_margin_from_texts,
     empirical_preflight as _empirical_preflight,
     measure_gate_flip_rate as _measure_gate_flip_rate,
     measure_judge_consistency as _measure_judge_consistency,
+    measure_scale_monotonicity as _measure_scale_monotonicity,
     noise_floor_estimate as _noise_floor_estimate,
+    probe_strict_schema as _probe_strict_schema,
     project_performance as _project_performance,
 )
 
@@ -132,6 +135,54 @@ def _build_judge(provider):
     return LLMJudge(provider=provider_obj)
 
 
+def _resolve_token_counter(spec):
+    """Resolve a JSON-friendly tokenizer spec into a ``str -> int`` callable.
+
+    FAIL LOUD: if the requested tokenizer backend is unavailable, RAISE.
+    Never silently fall back to the chars/token heuristic — an agent that
+    asks for an exact token count and silently gets an approximation is
+    exactly the false-safe this package exists to prevent. Pass ``None``
+    to deliberately use the heuristic path (which emits its own warning).
+
+    Supported specs:
+        ``None``                 -> heuristic path (no tokenizer)
+        ``"tiktoken"``           -> tiktoken with ``cl100k_base``
+        ``"tiktoken:<encoding>"``-> tiktoken with the named encoding
+    """
+    if spec is None:
+        return None
+    if not isinstance(spec, str):
+        raise ValueError(
+            f"token_counter must be a tokenizer spec string or null, got "
+            f"{type(spec).__name__}."
+        )
+    spec = spec.strip()
+    if spec.startswith("tiktoken"):
+        try:
+            import tiktoken  # type: ignore
+        except ImportError as exc:  # fail loud, do NOT degrade silently
+            raise RuntimeError(
+                "token_counter='tiktoken' requested but the 'tiktoken' package "
+                "is not installed. Install it or pass token_counter=null to use "
+                "the chars_per_token heuristic (which warns explicitly). "
+                "Refusing to silently fall back to the heuristic."
+            ) from exc
+        _, _, enc_name = spec.partition(":")
+        enc_name = enc_name or "cl100k_base"
+        try:
+            enc = tiktoken.get_encoding(enc_name)
+        except Exception as exc:  # unknown encoding -> loud, not silent
+            raise RuntimeError(
+                f"token_counter tiktoken encoding {enc_name!r} is unavailable: "
+                f"{exc}. Refusing to silently fall back to the heuristic."
+            ) from exc
+        return lambda text: len(enc.encode(text))
+    raise RuntimeError(
+        f"unknown token_counter spec {spec!r}. Supported: 'tiktoken' or "
+        f"'tiktoken:<encoding>', or null for the heuristic path."
+    )
+
+
 # ---------------------------------------------------------------------------
 # Tools
 # ---------------------------------------------------------------------------
@@ -151,6 +202,10 @@ def empirical_preflight(
     strict_schema_probe_messages: list[str] | None = None,
     strict_schema_provider: str | dict | None = None,
     fitness_samples: list[float] | None = None,
+    monotonic_examples: list[dict] | None = None,
+    token_counter: str | None = None,
+    system_prompts: list[str] | None = None,
+    gate_flip_repeats: int = 5,
 ) -> dict:
     """Run the combined judge / endpoint / performance preflight probe.
 
@@ -190,6 +245,19 @@ def empirical_preflight(
         fitness_samples: Optional list of fitness floats from repeated
             evaluations at fixed params. When supplied (>=2 samples),
             ``performance.noise_floor`` reflects the actual variance.
+        monotonic_examples: Optional ordered ``[{"item": {...},
+            "response": "..."}, ...]`` list in ascending quality order
+            (index 0 = worst). When supplied (>=2), ``scale_monotonic`` is
+            actually measured instead of fail-closed to False.
+        token_counter: Optional tokenizer spec ('tiktoken' or
+            'tiktoken:<encoding>') for an EXACT context margin. Omit / null
+            for the chars_per_token heuristic. An unavailable tokenizer
+            RAISES — it never silently falls back to the heuristic.
+        system_prompts: Optional list of system-prompt variants; the
+            longest is used as the worst case for the tokenizer-exact
+            context-margin computation.
+        gate_flip_repeats: How many times to repeat the hard-gate flip
+            probe (default 5). Set 0 to skip it.
 
     Returns:
         Dict with ``judge_quality``, ``endpoint``, ``performance``, and a
@@ -200,6 +268,13 @@ def empirical_preflight(
     rubric_obj = _resolve_rubric(rubric)
     item_obj = _resolve_item(probe_item)
     judge = _build_judge(provider)
+    token_counter_fn = _resolve_token_counter(token_counter)
+
+    monotonic_pairs = None
+    if monotonic_examples:
+        monotonic_pairs = [
+            (_resolve_item(pair["item"]), pair["response"]) for pair in monotonic_examples
+        ]
 
     schema_provider_obj = None
     schema_probes_seq: tuple = ()
@@ -253,6 +328,10 @@ def empirical_preflight(
         strict_schema_probes=schema_probes_seq,
         strict_schema_output=schema_output_type,
         fitness_samples=fitness_samples,
+        token_counter=token_counter_fn,
+        system_prompts=tuple(system_prompts) if system_prompts else (),
+        monotonic_examples=monotonic_pairs,
+        gate_flip_repeats=gate_flip_repeats,
     )
     return {
         "judge_quality": judge_q.model_dump(mode="json"),
@@ -439,3 +518,184 @@ def project_performance(
         calls_per_candidate_per_item=calls_per_candidate_per_item,
     )
     return perf.model_dump(mode="json")
+
+
+@mcp_app.tool()
+def measure_scale_monotonicity(
+    rubric: str | dict,
+    ordered_examples: list[dict],
+    provider: str | dict,
+) -> dict:
+    """Verify the judge preserves a known bad < mid < good ordering.
+
+    ``ordered_examples`` is a list of ``{"item": {...}, "response":
+    "..."}`` dicts in ASCENDING quality order — index 0 is the worst,
+    index -1 the best. The judge scores each pair once; the result is
+    ``True`` iff the weighted scores are non-decreasing in that order.
+
+    Two examples (bad < good) is the minimum; three or more
+    (bad < mid < good) is recommended for a stronger signal.
+
+    Args:
+        rubric: Path or inline dict for the JudgeRubric.
+        ordered_examples: ``[{"item": <DatasetItem dict>, "response":
+            <str>}, ...]`` in ascending quality order.
+        provider: Provider for the LLM judge.
+
+    Returns:
+        Dict with ``scale_monotonic`` (bool). True = the judge's ranking
+        agrees with the declared ordering.
+    """
+    rubric_obj = _resolve_rubric(rubric)
+    judge = _build_judge(provider)
+    pairs = [(_resolve_item(p["item"]), p["response"]) for p in ordered_examples]
+    monotonic = _measure_scale_monotonicity(
+        judge=judge,
+        rubric=rubric_obj,
+        ordered_examples=pairs,
+    )
+    return {"scale_monotonic": monotonic}
+
+
+@mcp_app.tool()
+def probe_strict_schema(
+    strict_schema_probe_messages: list[str],
+    provider: str | dict,
+) -> dict:
+    """Fire STRICT_SCHEMA probes and report parse success + silent degradation.
+
+    Sends each message via STRICT_SCHEMA mode against ``provider`` and
+    records the parse-success rate. A response that comes back WITHOUT a
+    ProviderError but with no parseable payload is a *silent* degradation
+    and is surfaced via ``silent_degradation_detected``.
+
+    Args:
+        strict_schema_probe_messages: User messages to send (>=1).
+        provider: Provider whose strict-schema reliability is probed.
+
+    Returns:
+        EndpointMeasurement dict (``schema_reliability``,
+        ``context_budget_margin`` placeholder, ``caching_active``,
+        ``silent_degradation_detected``).
+    """
+    from omegaprompt.domain.enums import (
+        OutputBudgetBucket,
+        ReasoningProfile,
+        ResponseSchemaMode,
+    )
+    from omegaprompt.domain.judge import JudgeResult
+    from omegaprompt.providers import make_provider as _mp
+    from omegaprompt.providers.base import ProviderRequest
+
+    if isinstance(provider, str):
+        provider_obj = _mp(provider)
+    elif isinstance(provider, dict):
+        provider_obj = _mp(
+            provider["name"],
+            model=provider.get("model"),
+            base_url=provider.get("base_url"),
+        )
+    else:
+        provider_obj = provider
+
+    probes = tuple(
+        ProviderRequest(
+            system_prompt="Strict-schema probe.",
+            user_message=msg,
+            response_schema_mode=ResponseSchemaMode.FREEFORM,
+            output_budget_bucket=OutputBudgetBucket.SMALL,
+            reasoning_profile=ReasoningProfile.OFF,
+        )
+        for msg in strict_schema_probe_messages
+    )
+    endpoint = _probe_strict_schema(
+        provider=provider_obj,
+        output_schema=JudgeResult,
+        probes=probes,
+    )
+    return endpoint.model_dump(mode="json")
+
+
+@mcp_app.tool()
+def compute_context_margin_from_texts(
+    context_window_tokens: int,
+    token_counter: str,
+    system_prompts: list[str] | None = None,
+    rubric_text: str = "",
+    inputs: list[str] | None = None,
+    references: list[str] | None = None,
+    candidate_responses: list[str] | None = None,
+) -> dict:
+    """Tokenizer-EXACT context margin from the actual texts of the largest call.
+
+    Unlike ``compute_context_margin`` (chars heuristic), this uses a real
+    tokenizer. The ``token_counter`` spec MUST resolve to an available
+    tokenizer — an unavailable one RAISES rather than silently falling
+    back to the heuristic (that would be a false-safe).
+
+    Args:
+        context_window_tokens: Provider context window in tokens.
+        token_counter: Tokenizer spec — 'tiktoken' or 'tiktoken:<encoding>'.
+        system_prompts: System-prompt variants; longest used.
+        rubric_text: Concatenated rubric body.
+        inputs: Dataset input texts; largest used.
+        references: Dataset reference texts; largest used.
+        candidate_responses: Observed candidate responses; largest used.
+
+    Returns:
+        Dict with ``margin`` (float; negative on projected overflow).
+    """
+    counter = _resolve_token_counter(token_counter)
+    if counter is None:
+        # token_counter is required for this tool; null is not allowed.
+        raise ValueError(
+            "compute_context_margin_from_texts requires a token_counter spec "
+            "(e.g. 'tiktoken'); for the heuristic use compute_context_margin."
+        )
+    margin = _compute_context_margin_from_texts(
+        system_prompts=tuple(system_prompts) if system_prompts else (),
+        rubric_text=rubric_text,
+        inputs=tuple(inputs) if inputs else (),
+        references=tuple(references) if references else (),
+        candidate_responses=tuple(candidate_responses) if candidate_responses else (),
+        context_window_tokens=context_window_tokens,
+        token_counter=counter,
+    )
+    return {"margin": margin}
+
+
+@mcp_app.tool()
+def derive_adaptation_plan(
+    judge_quality: dict | None = None,
+    endpoint: dict | None = None,
+    performance: dict | None = None,
+) -> dict:
+    """Convert preflight measurements into a concrete omegaprompt AdaptationPlan.
+
+    Closes the measure -> plan -> act loop entirely within MCP: feed the
+    ``judge_quality`` / ``endpoint`` / ``performance`` dicts returned by
+    ``empirical_preflight`` (or the individual probe tools) and get back
+    the plan omegaprompt's pipeline applies.
+
+    Args:
+        judge_quality: JudgeQualityMeasurement dict, or null if unmeasured.
+        endpoint: EndpointMeasurement dict, or null if unmeasured.
+        performance: PerformanceMeasurement dict, or null if unmeasured.
+
+    Returns:
+        AdaptationPlan dict (``plan.model_dump()``).
+    """
+    from omegaprompt.preflight import PreflightReport, derive_adaptation_plan as _dap
+    from omegaprompt.preflight.contracts import (
+        EndpointMeasurement,
+        JudgeQualityMeasurement,
+        PerformanceMeasurement,
+    )
+
+    report = PreflightReport(
+        judge_quality=JudgeQualityMeasurement.model_validate(judge_quality) if judge_quality else None,
+        endpoint=EndpointMeasurement.model_validate(endpoint) if endpoint else None,
+        performance=PerformanceMeasurement.model_validate(performance) if performance else None,
+    )
+    plan = _dap(report=report)
+    return plan.model_dump(mode="json")

@@ -30,10 +30,14 @@ EXPECTED_TOOLS = {
     "compute_context_margin",
     "noise_floor_estimate",
     "project_performance",
+    "measure_scale_monotonicity",
+    "probe_strict_schema",
+    "compute_context_margin_from_texts",
+    "derive_adaptation_plan",
 }
 
 
-def test_six_probes_registered(tools):
+def test_ten_probes_registered(tools):
     names = {t.name for t in tools}
     assert names == EXPECTED_TOOLS
 

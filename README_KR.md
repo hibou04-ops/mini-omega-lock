@@ -3,7 +3,7 @@
 > **[omegaprompt](https://pypi.org/project/omegaprompt/) calibration을 위한 empirical preflight probes.** Judge consistency, endpoint schema reliability, context-budget margin, latency, noise floor를 측정해서 `PreflightReport` 레코드를 만들어 omegaprompt의 `derive_adaptation_plan`에 흘려줍니다.
 
 [![CI](https://github.com/hibou04-ops/mini-omega-lock/actions/workflows/ci.yml/badge.svg)](https://github.com/hibou04-ops/mini-omega-lock/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/badge/pypi-0.5.0-blue.svg)](https://pypi.org/project/mini-omega-lock/)
+[![PyPI](https://img.shields.io/badge/pypi-0.6.0-blue.svg)](https://pypi.org/project/mini-omega-lock/)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org)
 [![Parent](https://img.shields.io/badge/parent-omegaprompt%E2%89%A51.1.0-blueviolet.svg)](https://pypi.org/project/omegaprompt/)
@@ -32,6 +32,16 @@ pip install mini-omega-lock
 - 긴 calibration 실행 전에 wall-time 추정이 필요.
 
 Stock frontier-tier provider + 선언된 기본값으로 잘 돌아가는 경우 굳이 필요 없습니다.
+
+## 0.6.0에서 새로워진 것
+
+- **Release 인프라 (`publish.yml`).** Trusted-publishing GitHub workflow (deterministic gauntlet + build + wheel smoke + readiness gate, 그다음 `pypi` environment + OIDC로 PyPI publish).
+- **Silent-degradation 신호 (C2).** `probe_strict_schema`가 strict-schema probe에서 `ProviderError` 없이 `parsed=None`이 오면 `silent_degradation_detected=True`로 표시합니다 — 예전엔 평범한 parse miss로 보이던 silent degradation. 미측정/fail-closed 경로는 `False`를 유지하되 degradation을 측정하지 않았다고 warning합니다.
+- **`preflight` CLI (H1).** `empirical_preflight()` + `derive_adaptation_plan()`을 감싸는 `preflight` console script (`--json` / `--jsonl` / `--text`). 어떤 필드든 fail-closed 기본값으로 떨어지면 non-zero로 종료 (CI용 fail-closed 의미 그대로). 사용 불가한 `--token-counter`는 heuristic으로 조용히 fallback하지 않고 raise합니다.
+- **Doc-citation 수정 (M5).** 존재하지 않는 `omega_lock.preflight` API를 인용하던 docstring을 실제 존재하는 omega-lock (parameter-calibration framework) 레벨로 정정.
+- **완전한 MCP 표면 (H2).** 새 MCP 도구 4개 (`measure_scale_monotonicity`, `probe_strict_schema`, `compute_context_margin_from_texts`, `derive_adaptation_plan`) + `empirical_preflight` MCP 파라미터 4개 (`monotonic_examples`, `token_counter`, `system_prompts`, `gate_flip_repeats`). Tokenizer dispatch는 fail-loud — 사용 불가한 tokenizer는 chars/token heuristic으로 조용히 fallback하지 않고 raise.
+
+Development Status는 `3 - Alpha`로 유지합니다; CLI/MCP 표면이 freeze되는 다음 릴리스에서 `4 - Beta`로 올립니다.
 
 ## Trust loop (네트워크 없이)
 
@@ -75,7 +85,7 @@ Scripted fake judge로 `empirical_preflight`를 재현 — 출력은 `examples/_
 
 ## MCP server
 
-이 패키지는 6개의 probe를 agent에서 호출 가능한 MCP 도구로 expose합니다 (regenerated 목록: [docs/generated/claims_kr.md](docs/generated/claims_kr.md)).
+이 패키지는 10개의 도구를 agent에서 호출 가능한 MCP 도구로 expose합니다 (regenerated 목록: [docs/generated/claims_kr.md](docs/generated/claims_kr.md)).
 
 ```bash
 pip install "mini-omega-lock[mcp]"

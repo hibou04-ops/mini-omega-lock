@@ -12,9 +12,16 @@ If you're running omegaprompt with provider/endpoint/judge defaults and nothing 
 - Your local/cloud endpoint sometimes rejects strict schema.
 - You want to know how long a full calibration will take *before* running it.
 
-## What it measures (5 measurement categories; 6 MCP tools)
+## What's new in 0.6.0
 
-> The five categories below are the **conceptual** probe surface — judge / endpoint / context / latency / noise floor. The MCP server exposes them as **6 tools** because hard-gate flip rate (`measure_gate_flip_rate`) is wired as its own tool under the judge category. The canonical tool list lives in [docs/generated/claims.md](docs/generated/claims.md).
+- **`preflight` CLI** — run a check from the shell (`preflight --help`), no Python needed; exits non-zero when something couldn't be measured (CI-friendly).
+- **Silent-degradation signal** — when an endpoint quietly returns unparseable output, it's now flagged instead of ignored.
+- **Complete MCP surface (10 tools)** — every probe plus a `derive_adaptation_plan` tool are now agent-callable.
+- Still **3 - Alpha**; 4 - Beta is the next release, once the CLI/MCP surface freezes.
+
+## What it measures (5 measurement categories; 10 MCP tools)
+
+> The five categories below are the **conceptual** probe surface — judge / endpoint / context / latency / noise floor. The MCP server exposes **10 tools** because several categories carry multiple probes (e.g. hard-gate flip rate, scale monotonicity, and tokenizer-exact context margin are each their own tool) plus a `derive_adaptation_plan` tool that turns measurements into a plan. The canonical tool list lives in [docs/generated/claims.md](docs/generated/claims.md).
 
 
 | Probe | What it tells you | Default cost |

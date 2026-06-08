@@ -1,0 +1,108 @@
+name: publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Existing release tag to publish, for example v0.6.0"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify-build:
+    name: verify and build
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.release-ref.outputs.release_tag }}
+    steps:
+      - name: Resolve release ref
+        id: release-ref
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            release_tag="${{ inputs.release_tag }}"
+          else
+            release_tag="${GITHUB_REF_NAME}"
+          fi
+          if [[ ! "${release_tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release ref must look like v0.6.0; got ${release_tag}" >&2
+            exit 1
+          fi
+          echo "release_tag=${release_tag}" >> "${GITHUB_OUTPUT}"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release-ref.outputs.release_tag }}
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install build, test, and MCP tooling
+        run: |
+          python -m pip install --upgrade pip build
+          python -m pip install -e ".[dev,mcp]"
+
+      - name: Verify tag matches package version
+        shell: bash
+        run: |
+          tag="${{ steps.release-ref.outputs.release_tag }}"
+          version="${tag#v}"
+          pyproject_version="$(python -c "import tomllib,pathlib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")"
+          init_version="$(python -c "import mini_omega_lock; print(mini_omega_lock.__version__)")"
+          if [[ "${pyproject_version}" != "${version}" ]]; then
+            echo "Tag ${tag} -> version ${version} != pyproject.toml version ${pyproject_version}" >&2
+            exit 1
+          fi
+          if [[ "${init_version}" != "${version}" ]]; then
+            echo "Tag ${tag} -> version ${version} != mini_omega_lock.__version__ ${init_version}" >&2
+            exit 1
+          fi
+          echo "Version ${version} matches pyproject.toml and mini_omega_lock.__version__."
+
+      - name: Run deterministic verification
+        run: |
+          python -m pytest -q
+          python scripts/generate_readme_claims.py --check
+          python scripts/check_repo_consistency.py
+          python examples/demo_replay.py
+          python scripts/run_golden_cases.py --check
+          python scripts/verify_fixture_integrity.py
+          python scripts/release_audit.py --no-network
+
+      - name: Build distributions
+        run: python -m build
+
+      - name: Smoke install built wheel
+        run: python scripts/wheel_smoke_install.py dist/*.whl
+
+      - name: Publish readiness gate
+        run: python scripts/publish_readiness.py --no-network
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ steps.release-ref.outputs.release_tag }}
+          path: dist/mini_omega_lock-*
+          if-no-files-found: error
+
+  publish:
+    name: publish to PyPI
+    needs: verify-build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-${{ needs.verify-build.outputs.release_tag }}
+          path: dist
+
+      - name: Publish to PyPI using Trusted Publishing
+        uses: pypa/gh-action-pypi-publish@release/v1

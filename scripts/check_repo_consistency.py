@@ -360,6 +360,29 @@ def check_mcp_tools_registered_vs_init_doc(facts: dict, issues: list[Issue]) -> 
         )
 
 
+def check_no_stale_omega_lock_preflight_citation(_facts: dict, issues: list[Issue]) -> None:
+    """M5 coupling-safety: ``omega_lock.preflight`` is a NON-EXISTENT API.
+
+    A docstring once cited that path as the place this surface is exposed.
+    omega-lock exports no ``.preflight`` public surface, so the citation
+    was a broken coupling claim. Assert the string never reappears in
+    ``src/`` (the only place it would matter for the published package).
+    """
+    src_dir = REPO_ROOT / "src"
+    needle = "omega_lock.preflight"
+    for path in sorted(src_dir.rglob("*.py")):
+        text = path.read_text(encoding="utf-8")
+        if needle in text:
+            issues.append(
+                Issue(
+                    str(path.relative_to(REPO_ROOT)),
+                    f"cites non-existent API {needle!r}; omega-lock has no "
+                    f"public .preflight surface. Reference 'omega-lock "
+                    f"(parameter-calibration framework)' instead.",
+                )
+            )
+
+
 def check_generated_claims_drift(_facts: dict, issues: list[Issue]) -> None:
     """Delegate to the generator's --check mode."""
     result = subprocess.run(
@@ -393,6 +416,7 @@ CHECKS = [
     check_mcp_tool_count_claims,
     check_mcp_extra_and_script,
     check_mcp_tools_registered_vs_init_doc,
+    check_no_stale_omega_lock_preflight_citation,
     check_generated_claims_drift,
 ]
 

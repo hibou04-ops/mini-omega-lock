@@ -3,6 +3,17 @@
 All notable changes to `mini-omega-lock` are documented here. This
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.6.1] - 2026-06-08
+
+### Changed
+
+- **Release-workflow hardening (CI only — no package change).** The
+  `MINI_OMEGA_LOCK_RELEASE_WORKFLOW` env that tells `release_audit.py` to skip its
+  pre-tag "tag already exists" check was set at the publish job level, broader than
+  needed. It is now scoped to the Publish readiness gate step alone, so the
+  deterministic-verification pytest step runs the tag guard at full strength. The
+  built wheel/sdist are byte-identical to 0.6.0 (only the version string differs).
+
 ## [0.6.0] - 2026-06-08
 
 This release adds the missing release infrastructure, surfaces a silent

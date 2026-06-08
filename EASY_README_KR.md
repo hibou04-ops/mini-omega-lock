@@ -12,6 +12,10 @@ Omegaprompt 기본 provider/endpoint/judge 로 돌리는데 아무 문제 없으
 - Local/cloud 엔드포인트가 strict schema 를 가끔 거부.
 - 전체 calibration 이 얼마나 걸릴지 *실행 전*에 알고 싶음.
 
+## 0.6.1에서 새로워진 것
+
+- 릴리스 워크플로 경화(CI 전용). 0.6.0 대비 패키지/동작 변경 없음 — wheel/sdist는 버전만 다릅니다.
+
 ## 0.6.0에서 새로워진 것
 
 - **`preflight` CLI** — 셸에서 바로 체크(`preflight --help`), Python 불필요; 측정 못 한 항목이 있으면 non-zero 종료(CI 친화적).

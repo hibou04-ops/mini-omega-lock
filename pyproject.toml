@@ -4,14 +4,12 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mini-omega-lock"
-version = "0.6.1"
+version = "0.7.0"
 description = "Empirical preflight probes for omegaprompt calibration: judge consistency, endpoint schema reliability, context-budget margin, latency, noise floor. Emits PreflightReport records the omegaprompt pipeline consumes via derive_adaptation_plan."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
-authors = [
-    { name = "hibou04-ops" },
-]
+authors = [{name = "Kyunghoon Gwak", email = "hibouaile04@gmail.com"}]
 keywords = [
     "prompt-calibration",
     "preflight",

@@ -1,21 +1,111 @@
 # mini-omega-lock
 
-> **Empirical preflight probes for [omegaprompt](https://pypi.org/project/omegaprompt/) calibration.** Measures judge consistency, endpoint schema reliability, context-budget margin, latency, and noise floor — emits `PreflightReport` records that omegaprompt's `derive_adaptation_plan` consumes.
-
-[![CI](https://github.com/hibou04-ops/mini-omega-lock/actions/workflows/ci.yml/badge.svg)](https://github.com/hibou04-ops/mini-omega-lock/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/badge/pypi-0.6.1-blue.svg)](https://pypi.org/project/mini-omega-lock/)
-[![License: Apache 2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org)
-[![Parent](https://img.shields.io/badge/parent-omegaprompt%E2%89%A51.1.0-blueviolet.svg)](https://pypi.org/project/omegaprompt/)
+> **Your prompt-eval improvement might be smaller than your judge's own noise. mini-omega-lock measures that noise floor before you trust any A/B result.**
 
 ```bash
 pip install mini-omega-lock
 ```
 
-## Trust & verification
+[![CI](https://github.com/hibou04-ops/mini-omega-lock/actions/workflows/ci.yml/badge.svg)](https://github.com/hibou04-ops/mini-omega-lock/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/mini-omega-lock.svg?cacheSeconds=3600)](https://pypi.org/project/mini-omega-lock/)
+[![Python](https://img.shields.io/pypi/pyversions/mini-omega-lock.svg?cacheSeconds=3600)](https://pypi.org/project/mini-omega-lock/)
+[![License](https://img.shields.io/pypi/l/mini-omega-lock.svg?cacheSeconds=3600)](LICENSE)
+[![Parent](https://img.shields.io/badge/parent-omegaprompt%E2%89%A51.1.0-blueviolet.svg?cacheSeconds=3600)](https://pypi.org/project/omegaprompt/)
+
+## What is the "noise floor"?
+
+An LLM judge does not give the *same* response the *same* score every time. Ask it to grade one fixed `(response, rubric)` pair five times and you'll often get five slightly different scores. That spread is the **judge's noise floor**.
+
+It matters because of one rule:
+
+> **An optimization delta smaller than your judge's own noise is not real.**
+
+If prompt B scores 0.4% better than prompt A, but your judge swings 1.2% when re-grading the *identical* answer, your "win" is inside the noise. You'd ship B, but you measured a coin flip. mini-omega-lock fires a few cheap probe calls and tells you that floor number *before* you trust the A/B delta.
+
+```bash
+# One number, no Python, CI-friendly exit codes:
+preflight --provider anthropic --rubric rubric.json \
+          --probe-item item.json --probe-response "4" --summary
+# -> {"judge_noise_floor": 0.07, "schema_reliability": 0.0, ...}
+```
+
+It also measures three more pre-flight surfaces in the same pass: endpoint **schema reliability**, **context-budget margin**, and a **wall-time projection** for the full run.
+
+## Quick start (Python)
+
+```python
+from omegaprompt import make_provider
+from omegaprompt.domain.dataset import DatasetItem
+from omegaprompt.domain.judge import Dimension, JudgeRubric
+from omegaprompt.judges.llm_judge import LLMJudge
+from mini_omega_lock import empirical_preflight, judge_noise_floor
+
+judge  = LLMJudge(provider=make_provider("anthropic"))
+rubric = JudgeRubric(dimensions=[Dimension(name="accuracy", description="is it correct", weight=1.0)])
+probe  = DatasetItem(id="probe", input="2+2", reference="4")
+
+judge_quality, endpoint, performance, warnings = empirical_preflight(
+    judge=judge, rubric=rubric, probe_item=probe,
+    probe_response="4", consistency_repeats=5,
+)
+
+print("judge noise floor:", judge_noise_floor(judge_quality))
+for w in warnings:                 # fail-closed warnings are load-bearing
+    print("[mini-omega-lock]", w)
+```
+
+That's ~5 cheap API calls (under $0.01 on frontier tiers). `judge_noise_floor` is `1 - consistency`: `0.0` = the judge never disagreed with itself; the bigger the number, the larger the A/B delta you need before a "win" is believable.
+
+## Works with omegaprompt — and standalone
+
+- **Standalone:** the noise-floor probe is useful on its own. Run `preflight` against any LLM-judge / prompt-calibration setup, get the floor + schema-reliability numbers, gate your CI on them. No omegaprompt pipeline required to read the value.
+- **In the ecosystem:** `empirical_preflight` emits `omegaprompt.preflight.PreflightReport` records (`JudgeQualityMeasurement` / `EndpointMeasurement` / `PerformanceMeasurement`). Feed them to omegaprompt's `derive_adaptation_plan` and the calibration engine adapts its thresholds to what your infrastructure can actually deliver. mini-omega-lock is the empirical probe layer; omegaprompt is the engine it feeds.
+
+It depends on `omegaprompt` (`>=1.1.0`) to build those records, so `pip install mini-omega-lock` pulls omegaprompt in.
+
+## vs. "just trust the eval delta"
+
+| | Trust the A/B delta | mini-omega-lock |
+|---|---|---|
+| Tells you the judge's self-disagreement | no | **yes** (`judge_noise_floor`) |
+| Catches deltas smaller than judge noise | no — you ship coin flips | **yes** — flagged before you trust them |
+| Flags silent strict-schema degradation | no | **yes** (`silent_degradation_detected`) |
+| Estimates wall time before a long run | no | **yes** |
+| Cost | free, but misleading | ~5 cheap API calls (< $0.01) |
+
+## What it measures
+
+| Surface | Function | What it tells you |
+|---|---|---|
+| **Judge noise floor** | `judge_noise_floor`, `measure_judge_consistency` | `1 - CV` over repeated scores of one fixed pair. Below this floor, A/B deltas are noise. |
+| Hard-gate flip rate | `measure_gate_flip_rate` | How often a pass/fail gate flips on the *same* input — a flipping gate randomises the ship verdict even when the score looks stable. |
+| Endpoint schema reliability | `probe_strict_schema` | STRICT_SCHEMA parse-success fraction. `< 0.9` → omegaprompt falls back to `JSON_OBJECT`. Also flags *silent* degradation (200-shaped but unparseable). |
+| Context budget margin | `compute_context_margin` (chars) / `compute_context_margin_from_texts` (tokenizer-exact) | `1 - (longest_call_tokens / context_window)`. Negative = guaranteed overflow. |
+| Performance projection | `project_performance` | Probe latency × calibration scale → wall-time estimate before launching. |
+
+One call — `empirical_preflight()` — runs them in one pass and returns `(judge_quality, endpoint, performance, warnings)`. **Any unmeasured field fails closed** (e.g. `schema_reliability=0.0`, not `1.0`) and is named in `warnings`, so an agent can always tell "measured zero" from "we never ran that probe". Treat the warnings list as load-bearing in CI, not cosmetic.
+
+## CLI: machine summary, scorecard, threshold gates
+
+```bash
+# Flat, CI-consumable JSON (headline number + schema_version, byte-stable):
+preflight ... --summary
+
+# Single-file scorecard (stdlib only) for a PR artifact:
+preflight ... --scorecard html --scorecard-out preflight.html
+
+# Fail the build when the judge is too noisy or the endpoint too unreliable:
+preflight ... --fail-over-noise-floor 0.10 --fail-under-schema-reliability 0.90
+```
+
+Exit codes: `0` all measured & in-bound · `2` a field fell back to a fail-closed default (unmeasured) · `3` a measured value breached a `--fail-*` threshold (takes precedence over `2`) · `1` usage/runtime error. A measured-but-bad value alone (noisy judge, gate flip) is still `0` — it *was* measured.
+
+## Read more
 
 | Topic | English | 한국어 |
 |---|---|---|
+| Simpler intro | [EASY_README.md](EASY_README.md) | [EASY_README_KR.md](EASY_README_KR.md) |
+| Full Korean | — | [README_KR.md](README_KR.md) |
 | Generated source-of-truth claims | [docs/generated/claims.md](docs/generated/claims.md) | [docs/generated/claims_kr.md](docs/generated/claims_kr.md) |
 | Trust model | [docs/trust_model.md](docs/trust_model.md) | [docs/trust_model_kr.md](docs/trust_model_kr.md) |
 | Toolkit positioning | [docs/toolkit_positioning.md](docs/toolkit_positioning.md) | [docs/toolkit_positioning_kr.md](docs/toolkit_positioning_kr.md) |
@@ -23,37 +113,21 @@ pip install mini-omega-lock
 | Examples / deterministic demo | [docs/examples.md](docs/examples.md) | [docs/examples_kr.md](docs/examples_kr.md) |
 | Release checklist | [docs/release_checklist.md](docs/release_checklist.md) | — |
 | Post-release verification | [docs/post_release_verification.md](docs/post_release_verification.md) | — |
-| Simpler intro | [EASY_README.md](EASY_README.md) | [EASY_README_KR.md](EASY_README_KR.md) |
-| Full Korean | — | [README_KR.md](README_KR.md) |
-| Cross-toolkit cookbook | [AGENT_TRIGGERS.md](https://github.com/hibou04-ops/omegaprompt/blob/main/AGENT_TRIGGERS.md) | — |
 
-Sibling projects: [omegaprompt](https://github.com/hibou04-ops/omegaprompt) (calibration engine) · [omega-lock](https://github.com/hibou04-ops/omega-lock) (broader audit framework) · [antemortem-cli](https://github.com/hibou04-ops/antemortem-cli) (pre-implementation recon CLI) · [mini-antemortem-cli](https://github.com/hibou04-ops/mini-antemortem-cli) (analytical preflight) · [Antemortem](https://github.com/hibou04-ops/Antemortem) (methodology).
+Sibling projects: [omegaprompt](https://github.com/hibou04-ops/omegaprompt) (calibration engine) · [omega-lock](https://github.com/hibou04-ops/omega-lock) (broader audit framework) · [mini-antemortem-cli](https://github.com/hibou04-ops/mini-antemortem-cli) (analytical, no-API preflight) · [antemortem-cli](https://github.com/hibou04-ops/antemortem-cli) (pre-implementation recon).
 
-## Use it when
+## What's new in 0.7.0
 
-- The same response keeps getting different judge scores across runs.
-- Your endpoint sometimes rejects STRICT_SCHEMA mode silently.
-- You want a wall-time estimate before launching a long calibration.
+- **Judge noise-floor metrics, front and centre.** New `judge_noise_floor()` helper + a `build_summary()` that produces a flat, `schema_version`-tagged, byte-stable CI dict, and a stdlib-only `render_scorecard()` (Markdown / self-contained HTML).
+- **CLI `--summary`** (machine summary), **`--scorecard md|html`** (+ `--scorecard-out`), and **`--fail-over-noise-floor` / `--fail-under-schema-reliability` / `--fail-under-context-margin`** threshold gates (new exit code `3`).
+- **Version-agnostic publish workflow** + dynamic PyPI shields that track releases automatically.
+- Frozen surface unchanged: `empirical_preflight`, the three contract records, console scripts, and the `omegaprompt>=1.1.0` pin are all the same — additive only.
 
-You don't need it when you're on stock frontier-tier providers with declared defaults — `omegaprompt` runs fine without probes there.
-
-## What's new in 0.6.1
-
-- **Release-workflow hardening (CI only).** The publish workflow now scopes the `release_audit` tag-skip env (`MINI_OMEGA_LOCK_RELEASE_WORKFLOW`) to the publish-readiness step alone rather than the whole job, so the deterministic-verification pytest step runs the pre-tag guard at full strength. No package or behavior change — the wheel/sdist are identical to 0.6.0 bar the version string.
-
-## What's new in 0.6.0
-
-- **Release infrastructure (`publish.yml`).** Trusted-publishing GitHub workflow (the deterministic gauntlet + build + wheel smoke + readiness gate, then a PyPI publish job under the `pypi` environment with OIDC).
-- **Silent-degradation signal (C2).** `probe_strict_schema` now flags `silent_degradation_detected=True` when a strict-schema probe returns `parsed=None` *without* raising a `ProviderError` — a silent endpoint degradation that previously looked like a normal parse miss. The fail-closed/unprobed path keeps it `False` but warns that degradation was not probed.
-- **`preflight` CLI (H1).** A `preflight` console script wraps `empirical_preflight()` + `derive_adaptation_plan()` with `--json` / `--jsonl` / `--text` output. It exits non-zero when any field fell back to a fail-closed default (mirrors the library's fail-closed semantics for CI). An unavailable `--token-counter` raises rather than silently using the heuristic.
-- **Doc-citation fix (M5).** Corrected a stale docstring that cited a non-existent `omega_lock.preflight` API; it now references omega-lock (the parameter-calibration framework), a level that actually exists.
-- **Complete MCP surface (H2).** Four new MCP tools (`measure_scale_monotonicity`, `probe_strict_schema`, `compute_context_margin_from_texts`, `derive_adaptation_plan`) and four new `empirical_preflight` MCP params (`monotonic_examples`, `token_counter`, `system_prompts`, `gate_flip_repeats`). Tokenizer dispatch fails loud — an unavailable tokenizer raises, never silently falls back to the chars/token heuristic.
-
-Development Status stays `3 - Alpha`; `4 - Beta` is the next release, once the CLI/MCP surface freezes.
+See [CHANGELOG.md](CHANGELOG.md) for the full history.
 
 ## Trust loop (no network)
 
-These commands run entirely offline (no provider/API keys). They are also the commands that `scripts/release_audit.py` enforces — keeping local CI and release gate in lockstep.
+These run entirely offline (no API keys) and are exactly what `scripts/release_audit.py` enforces, so local CI and the release gate stay in lockstep:
 
 ```bash
 python -m pip install -e ".[dev,mcp]"
@@ -66,160 +140,26 @@ python scripts/verify_fixture_integrity.py
 python scripts/release_audit.py --no-network
 ```
 
-### Deterministic demo (one command, no API keys)
+`python examples/demo_replay.py` replays `empirical_preflight` against a scripted fake judge; its output is byte-for-byte equal to `examples/_demo_output.txt` (verified by `tests/test_demo_replay.py`) — the "did I break the warning surface?" smoke test.
+
+## MCP server
+
+This package also exposes ten agent-callable MCP tools (`empirical_preflight`, `measure_judge_consistency`, `measure_gate_flip_rate`, `measure_scale_monotonicity`, `probe_strict_schema`, `compute_context_margin`, `compute_context_margin_from_texts`, `noise_floor_estimate`, `project_performance`, `derive_adaptation_plan`) — regenerated list in [docs/generated/claims.md](docs/generated/claims.md).
 
 ```bash
-python examples/demo_replay.py
+pip install "mini-omega-lock[mcp]"
+python -m mini_omega_lock.mcp           # stdio (Claude Code default)
+python -m mini_omega_lock.mcp --http    # streamable-http
 ```
 
-Replays `empirical_preflight` against a scripted fake judge; the output is byte-for-byte equal to `examples/_demo_output.txt` (verified by `tests/test_demo_replay.py`). Use this as the "did I break the warning surface?" smoke test.
+> **Want the analytical (no-API, deterministic) preflight instead?** See sibling tool [`mini-antemortem-cli`](https://pypi.org/project/mini-antemortem-cli/) — same plugin interface, a deterministic rule-based classifier instead of LLM probes.
 
-## How is this different?
+## What this does *not* prove
 
-| Capability | `mini-omega-lock` (this) | `mini-antemortem-cli` | `omegaprompt` default preflight | Ad-hoc provider smoke test |
-|---|---|---|---|---|
-| Live empirical judge probe (production) | yes — scripted/mocked in tests | no (analytical) | no (declared defaults) | varies |
-| Judge consistency / gate-flip measurement | `measure_judge_consistency`, `measure_gate_flip_rate` | not in scope | not in scope | ad-hoc |
-| Strict-schema reliability measurement | `probe_strict_schema`; **fail-closed at 0.0** when probe not supplied | not in scope | not in scope | typically pass/fail, no rate |
-| Context margin | `compute_context_margin` (chars heuristic) + `compute_context_margin_from_texts` (tokenizer-exact) | analytical estimate | partial | ad-hoc |
-| Latency projection | yes — reuses consistency-probe wall time | no | no | ad-hoc |
-| Noise floor | caller-supplied `fitness_samples`; **fail-closed** otherwise | no | no | no |
-| Offline testability | default `pytest -q` is fully offline | deterministic by construction | yes | typically not |
-| Emits `omegaprompt.preflight.PreflightReport` shape | yes | yes | source of truth | partial |
-| What it does **not** prove | model quality, provider reliability under load, production adoption, external validation | same | same | same |
-| Analytical trap classification | not in scope — use `mini-antemortem-cli` | yes | no | no |
-
-Boundary in one line: this package's empirical probes measure a narrow preflight surface (judge / endpoint / context / latency / noise floor); they are not benchmarks of model quality or proofs of production readiness. See [docs/trust_model.md](docs/trust_model.md) and [docs/toolkit_positioning.md](docs/toolkit_positioning.md) for the full boundary, and [docs/claim_ledger.md](docs/claim_ledger.md) for the per-claim source-of-truth mapping.
-
-> **Looking for the analytical (no-API, deterministic) preflight?** See sibling tool [`mini-antemortem-cli`](https://pypi.org/project/mini-antemortem-cli/) — same plugin interface, deterministic rule-based classifier instead of LLM probes.
-
-> **MCP server.** This package also exposes ten tools (`empirical_preflight`, `measure_judge_consistency`, `measure_gate_flip_rate`, `measure_scale_monotonicity`, `probe_strict_schema`, `compute_context_margin`, `compute_context_margin_from_texts`, `noise_floor_estimate`, `project_performance`, `derive_adaptation_plan`) as agent-callable MCP tools — see [docs/generated/claims.md](docs/generated/claims.md) for the regenerated tool list. Install with `pip install "mini-omega-lock[mcp]"` then run `python -m mini_omega_lock.mcp` (stdio, default for Claude Code). See [AGENT_TRIGGERS.md scenario 2](https://github.com/hibou04-ops/omegaprompt/blob/main/AGENT_TRIGGERS.md#scenario-2--pre-calibration-sanity-check).
-
----
-
-## TL;DR
-
-`omegaprompt` ships a **plugin interface** for preflight probes (`omegaprompt.preflight.contracts` + `omegaprompt.preflight.adaptation`) but no probe implementation. This package fills that gap with five empirical measurements, then hands the result to omegaprompt's adaptation layer:
-
-- **Judge consistency** — same (response, rubric) scored N times → `1 - CV`. Low = noisy judge, need `rescore_count > 1`.
-- **Schema reliability** — STRICT_SCHEMA probe success rate. < 0.9 triggers `JSON_OBJECT` fallback automatically.
-- **Context budget margin** — `1 - (longest_call_tokens / context_window)`. Negative = guaranteed overflow.
-- **Performance projection** — probe latency × calibration scale → wall-time estimate before launching.
-- **Noise floor** — fitness stdev under identical params → adaptive `min_kc4` threshold.
-
-One call (`empirical_preflight()`) returns the three measurement records `omegaprompt`'s `derive_adaptation_plan()` consumes, plus a `warnings` list naming every field that fell back to a fail-closed default (e.g. `schema_reliability=0.0` when the strict-schema probe was not supplied).
-
-> **Looking for the analytical (no-API, deterministic) preflight?** See sibling tool [`mini-antemortem-cli`](https://pypi.org/project/mini-antemortem-cli/) — same plugin interface, deterministic rule-based classifier instead of LLM probes.
-
----
-
-## Quick start (3-minute)
-
-```python
-from omegaprompt import make_provider, PreflightReport, derive_adaptation_plan
-from omegaprompt.domain.dataset import DatasetItem
-from omegaprompt.domain.judge import Dimension, JudgeRubric
-from omegaprompt.judges.llm_judge import LLMJudge
-from mini_omega_lock import empirical_preflight
-
-judge_provider = make_provider("anthropic")
-judge = LLMJudge(provider=judge_provider)
-rubric = JudgeRubric(dimensions=[Dimension(name="accuracy", description="x", weight=1.0)])
-probe_item = DatasetItem(id="probe", input="2+2", reference="4")
-
-# One call → five measurements → adaptation plan
-judge_quality, endpoint, performance, warnings = empirical_preflight(
-    judge=judge, rubric=rubric, probe_item=probe_item,
-    probe_response="4", consistency_repeats=3,
-)
-for w in warnings:
-    print(f"[mini-omega-lock] {w}")
-
-report = PreflightReport(judge_quality=judge_quality, endpoint=endpoint, performance=performance)
-plan = derive_adaptation_plan(report)
-print(plan.recommendations)
-```
-
-> 👋 Simpler intro: [EASY_README.md](EASY_README.md) (English) · [EASY_README_KR.md](EASY_README_KR.md)
-
----
-
-## Why this is separate from omegaprompt
-
-`omegaprompt` ships a **plugin interface** (`omegaprompt.preflight.contracts` + `omegaprompt.preflight.adaptation`) but no probe code. Standalone users do not need preflight probes — they run calibration with declared defaults. Users who want adaptive thresholds tuned to their actual infrastructure install this package alongside:
-
-```bash
-pip install omegaprompt mini-omega-lock
-```
-
-## What it measures
-
-| Measurement | Function | What it tells you |
-|---|---|---|
-| Judge consistency | `measure_judge_consistency` | Same (response, rubric) scored `N` times; `1 - CV`. Low = noisy judge, need `rescore_count > 1`. |
-| Endpoint schema reliability | `probe_strict_schema` | `STRICT_SCHEMA` probe success fraction. `< 0.9` triggers `JSON_OBJECT` fallback. |
-| Context budget margin | `compute_context_margin` | `1 - (longest_call_tokens / context_window)`. Negative = overflow. |
-| Performance projection | `project_performance` | Mean probe latency → projected calibration wall time. |
-| Noise floor | `noise_floor_estimate` | Stdev of fitness under identical parameters. Sets adaptive `min_kc4`. |
-
-The composite entry point is `empirical_preflight()`, which runs all five in one call and returns a 4-tuple — three measurement records omegaprompt's adaptation layer consumes plus a `warnings` list. Any unmeasured field is fail-closed (e.g. `schema_reliability=0.0` rather than `1.0`) and named in the warnings; CI gates should treat the warnings list as load-bearing, not cosmetic.
-
-## Usage
-
-```python
-from omegaprompt import make_provider, PreflightReport, derive_adaptation_plan
-from omegaprompt.domain.dataset import DatasetItem
-from omegaprompt.domain.judge import Dimension, JudgeRubric
-from omegaprompt.judges.llm_judge import LLMJudge
-from mini_omega_lock import empirical_preflight
-
-judge_provider = make_provider("anthropic")
-judge = LLMJudge(provider=judge_provider)
-rubric = JudgeRubric(dimensions=[Dimension(name="accuracy", description="x", weight=1.0)])
-probe_item = DatasetItem(id="probe", input="2+2", reference="4")
-
-judge_quality, endpoint, performance, warnings = empirical_preflight(
-    judge=judge,
-    rubric=rubric,
-    probe_item=probe_item,
-    probe_response="4",
-    consistency_repeats=3,
-    dataset_size_hint=10,
-    candidates_expected=20,
-)
-
-# Surface fail-closed warnings before trusting the measurements.
-for w in warnings:
-    print(f"[mini-omega-lock] {w}")
-
-report = PreflightReport(
-    judge_quality=judge_quality,
-    endpoint=endpoint,
-    performance=performance,
-)
-plan = derive_adaptation_plan(report=report)
-# plan.min_kc4_override, plan.rescore_count, etc.
-```
-
-## Design principles
-
-- **No fabricated success.** Unmeasured fields fail closed (`schema_reliability=0.0`, `noise_floor=0.0`, `scale_monotonic=False`) and emit explicit warnings — agents can tell "measured zero" from "we never ran the probe". The context-margin probe runs as a length-based projection by default (`compute_context_margin`, `chars_per_token=3.8`); pass real texts and a `token_counter` to upgrade to a tokenizer-exact measurement (`compute_context_margin_from_texts`).
-- **Minimal probe budget.** Default 3 consistency repeats + 3 schema probes + 1 context-margin compute = 7-10 API calls per preflight. Worth < $0.01 on frontier tiers.
-- **Protocol-conformant output.** Emits `omegaprompt.preflight.contracts.JudgeQualityMeasurement` / `EndpointMeasurement` / `PerformanceMeasurement` exactly. No shape drift.
-- **Composable.** Can run alongside `mini-antemortem-cli` (analytical preflight) into the same `PreflightReport`.
-
-## Validation
-
-All adapter tests mock the provider SDK; no network, no API credits, fully offline. Run with `pytest -q`.
-
-## Relation to the family
-
-- **[omega-lock](https://github.com/hibou04-ops/omega-lock)** — parameter-calibration framework. The naming "mini-omega-lock" echoes this family; the *sensitivity + walk-forward + KC-4* discipline comes from there.
-- **[omegaprompt](https://pypi.org/project/omegaprompt/)** — prompt calibration engine. This package feeds its preflight plugin interface.
-- **[mini-antemortem-cli](https://pypi.org/project/mini-antemortem-cli/)** — analytical sibling. Runs deterministic trap classification over config before calibration.
+Not a benchmark of model quality, judge quality, or provider reliability under load. Not a production-readiness proof. It measures a narrow pre-flight surface (judge noise / endpoint / context / latency) so you stop trusting eval deltas that are smaller than your judge's own noise. See [docs/trust_model.md](docs/trust_model.md) and [docs/claim_ledger.md](docs/claim_ledger.md) for the per-claim boundary.
 
 ## License
 
 Apache 2.0. See [LICENSE](LICENSE).
 
-**License history.** PyPI distributions of version 0.1.0 were shipped with an MIT `LICENSE` file. The repository was relicensed to Apache 2.0 on 2026-04-22 (commit `ff489a9`); 0.2.0 (2026-04-28) and all later versions ship under Apache 2.0. Anyone who installed 0.1.0 holds an MIT license to that copy — license changes do not apply retroactively.
+**License history.** PyPI distributions of 0.1.0 shipped with an MIT `LICENSE`. The repository was relicensed to Apache 2.0 on 2026-04-22 (commit `ff489a9`); 0.2.0 and all later versions ship under Apache 2.0. Anyone who installed 0.1.0 holds an MIT license to that copy — license changes do not apply retroactively.

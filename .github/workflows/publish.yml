@@ -1,10 +1,16 @@
 name: publish
 
 on:
+  # Fires automatically when a GitHub Release is published (e.g. via
+  # `gh release create vX.Y.Z`). The tag carried by the release is the
+  # ref we build + verify + publish.
+  release:
+    types: [published]
+  # Manual fallback: publish an already-existing release tag.
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Existing release tag to publish, for example v0.6.0"
+        description: "Existing release tag to publish, for example v0.7.0"
         required: true
         type: string
 
@@ -22,13 +28,16 @@ jobs:
         id: release-ref
         shell: bash
         run: |
+          # Version-agnostic: never hard-code a version here. On a release
+          # event the tag is GITHUB_REF_NAME; on workflow_dispatch it is the
+          # supplied input.
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             release_tag="${{ inputs.release_tag }}"
           else
             release_tag="${GITHUB_REF_NAME}"
           fi
           if [[ ! "${release_tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Release ref must look like v0.6.0; got ${release_tag}" >&2
+            echo "Release ref must look like vX.Y.Z; got ${release_tag}" >&2
             exit 1
           fi
           echo "release_tag=${release_tag}" >> "${GITHUB_OUTPUT}"
@@ -48,22 +57,25 @@ jobs:
           python -m pip install --upgrade pip build
           python -m pip install -e ".[dev,mcp]"
 
-      - name: Verify tag matches package version
+      - name: Verify version is self-consistent and matches the tag
         shell: bash
         run: |
-          tag="${{ steps.release-ref.outputs.release_tag }}"
-          version="${tag#v}"
-          pyproject_version="$(python -c "import tomllib,pathlib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")"
+          # Single source of truth: read the version from pyproject.toml.
+          pyproject_version="$(python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
           init_version="$(python -c "import mini_omega_lock; print(mini_omega_lock.__version__)")"
-          if [[ "${pyproject_version}" != "${version}" ]]; then
-            echo "Tag ${tag} -> version ${version} != pyproject.toml version ${pyproject_version}" >&2
+          # 1. __init__.__version__ must match pyproject (always).
+          if [[ "${init_version}" != "${pyproject_version}" ]]; then
+            echo "mini_omega_lock.__version__ ${init_version} != pyproject.toml ${pyproject_version}" >&2
             exit 1
           fi
-          if [[ "${init_version}" != "${version}" ]]; then
-            echo "Tag ${tag} -> version ${version} != mini_omega_lock.__version__ ${init_version}" >&2
+          # 2. On a release/dispatch event the tag must equal v<version>.
+          tag="${{ steps.release-ref.outputs.release_tag }}"
+          expected_tag="v${pyproject_version}"
+          if [[ "${tag}" != "${expected_tag}" ]]; then
+            echo "Release tag ${tag} != v<version> ${expected_tag} (pyproject version ${pyproject_version})" >&2
             exit 1
           fi
-          echo "Version ${version} matches pyproject.toml and mini_omega_lock.__version__."
+          echo "Version ${pyproject_version} matches pyproject.toml, mini_omega_lock.__version__, and tag ${tag}."
 
       - name: Run deterministic verification
         run: |

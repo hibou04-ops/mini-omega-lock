@@ -3,6 +3,64 @@
 All notable changes to `mini-omega-lock` are documented here. This
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.7.0] - 2026-06-12
+
+This release puts the package's headline value — the **judge noise
+floor** — front and centre, adds CI-consumable output + threshold gates,
+and makes the publish workflow fully version-agnostic. Everything is
+**additive**: the frozen surface (`empirical_preflight` signature, the
+three `omegaprompt.preflight.contracts` records it produces, the console
+script names, the import name, and the `omegaprompt>=1.1.0` pin) is
+unchanged.
+
+### Added
+
+- **Headline summary layer (`mini_omega_lock.summary`).** Three new
+  public helpers, all exported in `__all__`:
+  - `judge_noise_floor(judge_quality)` — the single load-bearing number,
+    defined as `1 - consistency` (`0.0` = the judge never disagreed with
+    itself). An A/B fitness delta smaller than this is below the judge's
+    own noise and is not a real improvement.
+  - `build_summary(judge_quality, endpoint, performance, warnings)` — a
+    flat, JSON-serialisable, **byte-stable** CI dict (timing fields
+    excluded) carrying a `schema_version` string (`mini-omega-lock/summary/v1`)
+    and an `unmeasured_fields` list extracted from the warnings.
+  - `render_scorecard(summary, fmt="md"|"html")` — a single-file
+    preflight scorecard, **stdlib only**, deterministic (no timestamp),
+    self-contained HTML (inline CSS, no external assets).
+- **CLI machine summary + scorecard + threshold gates.**
+  - `--summary` emits the flat `build_summary` JSON (distinct from the
+    full `--json`/`--jsonl` dumps, which now also carry a `summary` key).
+  - `--scorecard md|html` (+ `--scorecard-out PATH`) renders the
+    scorecard to stdout or a file.
+  - `--fail-over-noise-floor X`, `--fail-under-schema-reliability X`,
+    `--fail-under-context-margin X` add a new exit code **3** when a
+    *measured* value breaches the bound. A threshold breach takes
+    precedence over the fail-closed unmeasured-field exit (2).
+- **Version-agnostic publish workflow.** `publish.yml` now also triggers
+  on a published GitHub Release, reads the version from `pyproject.toml`
+  via `tomllib`, and asserts `__init__.__version__` matches and the tag
+  equals `v<version>`. No version is hard-coded in workflow logic.
+- **Dynamic PyPI shields.** README badges switched to
+  `img.shields.io/pypi/v|pyversions|l/...` with `?cacheSeconds=3600`, so
+  the version/python/license badges track releases automatically instead
+  of being pinned in prose. `check_repo_consistency.py` accepts the
+  dynamic shield form (and still validates a static badge if present).
+
+### Changed
+
+- **README family overhaul** (README, README_KR, EASY_README,
+  EASY_README_KR) leads with the noise-floor value proposition, explains
+  "noise floor" in plain language, frames standalone vs. omegaprompt use,
+  and adds a "vs. just trust the eval delta" comparison + a README
+  cross-link row.
+
+### Maintenance
+
+- pyproject `authors` set to `Kyunghoon Gwak <hibouaile04@gmail.com>`.
+- Development Status remains `3 - Alpha` (the CLI/MCP surface is still
+  expanding; `4 - Beta` waits for it to freeze).
+
 ## [0.6.1] - 2026-06-08
 
 ### Changed

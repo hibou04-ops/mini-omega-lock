@@ -73,14 +73,39 @@ def check_readme_badges(facts: dict, issues: list[Issue]) -> None:
         return
     text = README.read_text(encoding="utf-8")
 
-    # PyPI version badge.
-    m = re.search(r"img\.shields\.io/badge/pypi-([0-9][0-9A-Za-z._-]*)-", text)
-    if m and m.group(1) != facts["version"]:
+    # PyPI version badge. Two accepted forms:
+    #   (a) dynamic shield: ``img.shields.io/pypi/v/<dist>`` — reads the live
+    #       PyPI version, so there is NO embedded number to drift. Preferred
+    #       (0.7.0+): the badge auto-tracks releases and never goes stale.
+    #   (b) legacy static: ``img.shields.io/badge/pypi-<version>-`` — the
+    #       number is pinned in the README and MUST equal pyproject version.
+    # When a dynamic badge is present we do not require a static one; when
+    # only a static one is present we assert it matches.
+    dist_name = facts.get("name", "")
+    dynamic = (
+        re.search(r"img\.shields\.io/pypi/v/" + re.escape(dist_name), text)
+        if dist_name
+        else None
+    )
+    static = re.search(r"img\.shields\.io/badge/pypi-([0-9][0-9A-Za-z._-]*)-", text)
+    if static and static.group(1) != facts["version"]:
         issues.append(
             Issue(
                 "README badge",
-                f"PyPI badge version {m.group(1)!r} != pyproject "
+                f"PyPI badge version {static.group(1)!r} != pyproject "
                 f"version {facts['version']!r}",
+            )
+        )
+    # Only assert "a badge exists" when we know the distribution name (the
+    # real orchestrator always supplies it; the targeted unit tests for the
+    # tests-N-badge rule pass a minimal facts dict and skip this).
+    if dist_name and not dynamic and not static:
+        issues.append(
+            Issue(
+                "README badge",
+                "no PyPI version badge found — expected a dynamic "
+                f"`img.shields.io/pypi/v/{dist_name}` shield (preferred) "
+                "or a static `img.shields.io/badge/pypi-<version>-` badge",
             )
         )
 

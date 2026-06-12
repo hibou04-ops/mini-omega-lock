@@ -16,6 +16,11 @@ keywords = [
     "llm-judge",
     "omegaprompt",
     "omega-lock",
+    "llm-evaluation",
+    "llm-as-judge",
+    "evals",
+    "prompt-engineering",
+    "mcp",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",

@@ -22,9 +22,22 @@ CLI must leave it untouched.
 
 Output modes::
 
-    --text    human-readable blocks (default)
-    --json    one pretty JSON object
-    --jsonl   one compact JSON object per line (report, then plan)
+    --text       human-readable blocks (default)
+    --json       one pretty JSON object (full report + plan)
+    --jsonl      one compact JSON object per line (report, then plan)
+    --summary    flat CI-consumable JSON (headline judge_noise_floor +
+                 schema_reliability etc. + a schema_version string)
+    --scorecard  single-file Markdown / HTML scorecard (stdlib only)
+
+CI threshold gates (independent of the fail-closed exit-2 contract)::
+
+    --fail-over-noise-floor X         exit 3 if judge_noise_floor   > X
+    --fail-under-schema-reliability X exit 3 if schema_reliability  < X
+    --fail-under-context-margin X     exit 3 if context_budget_margin < X
+
+A threshold breach (exit 3) takes precedence over the fail-closed
+unmeasured-field exit (2): a measured value that violates the bound is a
+louder failure than an unmeasured field.
 """
 
 from __future__ import annotations
@@ -50,6 +63,7 @@ _UNMEASURED_FIELD_SIGNALS: tuple[str, ...] = (
 EXIT_OK = 0
 EXIT_USAGE = 1
 EXIT_UNMEASURED = 2
+EXIT_THRESHOLD = 3
 
 
 # ---------------------------------------------------------------------------
@@ -180,12 +194,18 @@ def _run_preflight(args: argparse.Namespace) -> dict[str, Any]:
     report = PreflightReport(judge_quality=judge_q, endpoint=endpoint, performance=perf)
     plan = derive_adaptation_plan(report=report)
 
+    from mini_omega_lock.summary import build_summary
+
     return {
         "judge_quality": judge_q.model_dump(mode="json"),
         "endpoint": endpoint.model_dump(mode="json"),
         "performance": perf.model_dump(mode="json"),
         "warnings": list(warnings),
         "adaptation_plan": plan.model_dump(mode="json"),
+        # Flat, byte-stable headline summary (timing excluded). Always
+        # computed so --summary / --scorecard / threshold gates can read it
+        # without re-running the probe.
+        "summary": build_summary(judge_q, endpoint, perf, warnings),
     }
 
 
@@ -196,6 +216,38 @@ def _exit_code_for_warnings(warnings: Sequence[str]) -> int:
             if signal in w:
                 return EXIT_UNMEASURED
     return EXIT_OK
+
+
+def _threshold_breaches(summary: dict[str, Any], args: argparse.Namespace) -> list[str]:
+    """Return human-readable CI threshold breaches (empty list = all pass).
+
+    Each comparison is against a *measured* value in the summary. The
+    caller maps a non-empty list to ``EXIT_THRESHOLD`` and prints the
+    breaches to stderr so a CI log names exactly which bound failed.
+    """
+    breaches: list[str] = []
+    if args.fail_over_noise_floor is not None:
+        nf = float(summary["judge_noise_floor"])
+        if nf > args.fail_over_noise_floor:
+            breaches.append(
+                f"judge_noise_floor {nf:.6f} exceeds --fail-over-noise-floor "
+                f"{args.fail_over_noise_floor:.6f}"
+            )
+    if args.fail_under_schema_reliability is not None:
+        sr = float(summary["schema_reliability"])
+        if sr < args.fail_under_schema_reliability:
+            breaches.append(
+                f"schema_reliability {sr:.6f} is below "
+                f"--fail-under-schema-reliability {args.fail_under_schema_reliability:.6f}"
+            )
+    if args.fail_under_context_margin is not None:
+        cm = float(summary["context_budget_margin"])
+        if cm < args.fail_under_context_margin:
+            breaches.append(
+                f"context_budget_margin {cm:.6f} is below "
+                f"--fail-under-context-margin {args.fail_under_context_margin:.6f}"
+            )
+    return breaches
 
 
 # ---------------------------------------------------------------------------
@@ -236,6 +288,19 @@ def _render_jsonl(result: dict[str, Any]) -> str:
         + json.dumps(plan, ensure_ascii=False, sort_keys=True)
         + "\n"
     )
+
+
+def _render_summary(result: dict[str, Any]) -> str:
+    """Flat, byte-stable headline summary (no timing fields)."""
+    from mini_omega_lock.summary import summary_json
+
+    return summary_json(result["summary"])
+
+
+def _render_scorecard(result: dict[str, Any], fmt: str) -> str:
+    from mini_omega_lock.summary import render_scorecard
+
+    return render_scorecard(result["summary"], fmt=fmt)
 
 
 # ---------------------------------------------------------------------------
@@ -304,9 +369,64 @@ def build_parser() -> argparse.ArgumentParser:
     )
     fmt = parser.add_mutually_exclusive_group()
     fmt.add_argument("--text", action="store_const", dest="format", const="text", help="Human-readable output (default).")
-    fmt.add_argument("--json", action="store_const", dest="format", const="json", help="Pretty JSON output.")
+    fmt.add_argument("--json", action="store_const", dest="format", const="json", help="Pretty JSON output (full report + plan).")
     fmt.add_argument("--jsonl", action="store_const", dest="format", const="jsonl", help="JSON-lines output.")
+    fmt.add_argument(
+        "--summary",
+        action="store_const",
+        dest="format",
+        const="summary",
+        help=(
+            "Flat CI-consumable JSON: headline judge_noise_floor + "
+            "schema_reliability etc. + a schema_version string (timing "
+            "excluded, byte-stable)."
+        ),
+    )
+    fmt.add_argument(
+        "--scorecard",
+        dest="scorecard",
+        choices=("md", "html"),
+        default=None,
+        help=(
+            "Render a single-file preflight scorecard (Markdown or HTML, "
+            "stdlib only) to stdout instead of the default output. Combine "
+            "with --scorecard-out to write to a file."
+        ),
+    )
     parser.set_defaults(format="text")
+
+    parser.add_argument(
+        "--scorecard-out",
+        dest="scorecard_out",
+        default=None,
+        help="Write the --scorecard output to this path instead of stdout.",
+    )
+
+    gate = parser.add_argument_group(
+        "CI threshold gates",
+        "Each breach exits 3 (takes precedence over the fail-closed exit 2).",
+    )
+    gate.add_argument(
+        "--fail-over-noise-floor",
+        dest="fail_over_noise_floor",
+        type=float,
+        default=None,
+        help="Exit 3 if the measured judge_noise_floor exceeds this value (0-1).",
+    )
+    gate.add_argument(
+        "--fail-under-schema-reliability",
+        dest="fail_under_schema_reliability",
+        type=float,
+        default=None,
+        help="Exit 3 if the measured schema_reliability drops below this value (0-1).",
+    )
+    gate.add_argument(
+        "--fail-under-context-margin",
+        dest="fail_under_context_margin",
+        type=float,
+        default=None,
+        help="Exit 3 if the measured context_budget_margin drops below this value.",
+    )
     return parser
 
 
@@ -332,8 +452,36 @@ def main(argv: list[str] | None = None) -> int:
         print(f"preflight: runtime error: {type(exc).__name__}: {exc}", file=sys.stderr)
         return EXIT_USAGE
 
-    renderers = {"text": _render_text, "json": _render_json, "jsonl": _render_jsonl}
-    sys.stdout.write(renderers[args.format](result))
+    # Scorecard output is a separate axis from the --text/--json/... format
+    # group: when --scorecard is given it replaces the default rendering and
+    # may be written to a file.
+    if args.scorecard is not None:
+        rendered = _render_scorecard(result, args.scorecard)
+        if args.scorecard_out:
+            try:
+                Path(args.scorecard_out).write_text(rendered, encoding="utf-8")
+            except OSError as exc:
+                print(f"preflight: could not write scorecard: {exc}", file=sys.stderr)
+                return EXIT_USAGE
+            print(f"preflight: wrote scorecard to {args.scorecard_out}")
+        else:
+            sys.stdout.write(rendered)
+    else:
+        renderers = {
+            "text": _render_text,
+            "json": _render_json,
+            "jsonl": _render_jsonl,
+            "summary": _render_summary,
+        }
+        sys.stdout.write(renderers[args.format](result))
+
+    # Exit-code precedence: a CI threshold breach (measured-but-out-of-bound)
+    # is louder than a fail-closed unmeasured field, which is louder than OK.
+    breaches = _threshold_breaches(result["summary"], args)
+    if breaches:
+        for b in breaches:
+            print(f"preflight: threshold breach: {b}", file=sys.stderr)
+        return EXIT_THRESHOLD
 
     return _exit_code_for_warnings(result["warnings"])
 

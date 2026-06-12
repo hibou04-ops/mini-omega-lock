@@ -100,8 +100,13 @@ def test_cli_json_output_shape(monkeypatch):
         "performance",
         "warnings",
         "adaptation_plan",
+        # 0.7.0: the full --json dump now carries the flat headline summary
+        # too, so a consumer can read judge_noise_floor without re-deriving
+        # it from judge_quality.consistency.
+        "summary",
     }
     assert isinstance(obj["warnings"], list)
+    assert obj["summary"]["schema_version"].startswith("mini-omega-lock/summary/")
     # Unmeasured fields present -> fail-closed exit 2.
     assert code == 2
 
@@ -128,6 +133,91 @@ def test_cli_text_output_shape(monkeypatch):
 def test_cli_default_format_is_text(monkeypatch):
     out, _ = _run_cli_inprocess(_BASE_ARGS, monkeypatch)
     assert out.startswith("=== mini-omega-lock preflight ===")
+
+
+# ---------------------------------------------------------------------------
+# 0.7.0: --summary / --scorecard / threshold gates.
+# ---------------------------------------------------------------------------
+
+
+def test_cli_summary_output_shape(monkeypatch):
+    out, code = _run_cli_inprocess(_BASE_ARGS + ["--summary"], monkeypatch)
+    obj = json.loads(out)
+    # Flat machine summary, headline first key set; carries schema_version.
+    assert obj["schema_version"].startswith("mini-omega-lock/summary/")
+    assert "judge_noise_floor" in obj
+    assert "schema_reliability" in obj
+    # Timing fields must not leak into the byte-stable summary.
+    assert "mean_call_latency_ms" not in obj
+    assert "projected_wall_time_seconds" not in obj
+    # Unmeasured fields present in this flag surface -> exit 2.
+    assert code == 2
+
+
+def test_cli_scorecard_markdown(monkeypatch):
+    out, code = _run_cli_inprocess(_BASE_ARGS + ["--scorecard", "md"], monkeypatch)
+    assert out.startswith("# mini-omega-lock preflight scorecard")
+    assert "Judge noise floor" in out
+    assert code == 2
+
+
+def test_cli_scorecard_html_self_contained(monkeypatch):
+    out, code = _run_cli_inprocess(_BASE_ARGS + ["--scorecard", "html"], monkeypatch)
+    assert out.startswith("<!doctype html>")
+    assert "<style>" in out
+    assert code == 2
+
+
+def test_cli_scorecard_out_writes_file(monkeypatch, tmp_path):
+    target = tmp_path / "scorecard.html"
+    out, code = _run_cli_inprocess(
+        _BASE_ARGS + ["--scorecard", "html", "--scorecard-out", str(target)],
+        monkeypatch,
+    )
+    assert target.exists()
+    assert target.read_text(encoding="utf-8").startswith("<!doctype html>")
+    assert "wrote scorecard" in out
+    # Still subject to the exit-code contract.
+    assert code == 2
+
+
+def test_cli_fail_under_schema_reliability_breach_exit_3(monkeypatch):
+    # Schema probe not supplied -> schema_reliability=0.0 < 0.9 -> exit 3.
+    _, code = _run_cli_inprocess(
+        _BASE_ARGS + ["--summary", "--fail-under-schema-reliability", "0.9"],
+        monkeypatch,
+    )
+    assert code == 3
+
+
+def test_cli_fail_over_noise_floor_pass_falls_to_unmeasured(monkeypatch):
+    # Scripted judge -> noise floor 0.0, NOT > 0.5 -> no breach; the
+    # unmeasured-field exit (2) still applies.
+    _, code = _run_cli_inprocess(
+        _BASE_ARGS + ["--summary", "--fail-over-noise-floor", "0.5"],
+        monkeypatch,
+    )
+    assert code == 2
+
+
+def test_cli_threshold_breach_precedes_unmeasured(monkeypatch):
+    # nf=0.0 > -0.1 -> breach -> exit 3 even though unmeasured fields exist.
+    _, code = _run_cli_inprocess(
+        _BASE_ARGS + ["--summary", "--fail-over-noise-floor", "-0.1"],
+        monkeypatch,
+    )
+    assert code == 3
+
+
+def test_exit_code_threshold_constant_distinct():
+    from mini_omega_lock.cli import (
+        EXIT_OK,
+        EXIT_THRESHOLD,
+        EXIT_UNMEASURED,
+        EXIT_USAGE,
+    )
+
+    assert len({EXIT_OK, EXIT_USAGE, EXIT_UNMEASURED, EXIT_THRESHOLD}) == 4
 
 
 # ---------------------------------------------------------------------------

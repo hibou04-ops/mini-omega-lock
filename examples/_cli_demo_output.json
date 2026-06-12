@@ -41,6 +41,28 @@
     "noise_floor": 0.0,
     "projected_wall_time_seconds": "<masked: timing>"
   },
+  "summary": {
+    "all_fields_measured": false,
+    "anchoring_usage": 0.0,
+    "caching_active": false,
+    "consistency_samples": 3,
+    "context_budget_margin": 0.999720394737,
+    "fitness_noise_floor": 0.0,
+    "judge_consistency": 1.0,
+    "judge_noise_floor": 0.0,
+    "scale_monotonic": false,
+    "schema_reliability": 0.0,
+    "schema_version": "mini-omega-lock/summary/v1",
+    "silent_degradation_detected": false,
+    "unmeasured_fields": [
+      "context_budget_margin",
+      "fitness_noise_floor",
+      "scale_monotonic",
+      "schema_reliability",
+      "silent_degradation_detected"
+    ],
+    "warning_count": 5
+  },
   "warnings": [
     "judge_quality.scale_monotonic not measured — pass monotonic_examples=[(bad_item, bad_resp), ..., (good_item, good_resp)] to verify bad < mid < good ordering. Defaulted to False (fail-closed).",
     "endpoint.schema_reliability not measured — strict_schema_provider, strict_schema_output, and strict_schema_probes were not supplied; value defaulted to 0.0 (fail-closed). Pass these to actually probe the provider's strict-schema reliability.",

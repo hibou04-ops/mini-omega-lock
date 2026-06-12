@@ -1,121 +1,78 @@
 # mini-omega-lock — Easy Start
 
-> The short version, for people who found the main README intimidating.
-> Full doc: [README.md](README.md) · 한국어 Easy: [EASY_README_KR.md](EASY_README_KR.md)
-
-## What is this?
-
-An optional plug-in for [omegaprompt](https://pypi.org/project/omegaprompt/) that **measures your actual environment** before you calibrate, so omegaprompt can adapt its thresholds to what your setup can actually deliver.
-
-If you're running omegaprompt with provider/endpoint/judge defaults and nothing feels weird, you don't need this. Install it only if any of these apply:
-- Your judge gives different scores to the same response across runs.
-- Your local/cloud endpoint sometimes rejects strict schema.
-- You want to know how long a full calibration will take *before* running it.
-
-## What's new in 0.6.1
-
-- Release-workflow hardening (CI only). No package or behavior change vs 0.6.0 — the wheel/sdist are the same bar the version.
-
-## What's new in 0.6.0
-
-- **`preflight` CLI** — run a check from the shell (`preflight --help`), no Python needed; exits non-zero when something couldn't be measured (CI-friendly).
-- **Silent-degradation signal** — when an endpoint quietly returns unparseable output, it's now flagged instead of ignored.
-- **Complete MCP surface (10 tools)** — every probe plus a `derive_adaptation_plan` tool are now agent-callable.
-- Still **3 - Alpha**; 4 - Beta is the next release, once the CLI/MCP surface freezes.
-
-## What it measures (5 measurement categories; 10 MCP tools)
-
-> The five categories below are the **conceptual** probe surface — judge / endpoint / context / latency / noise floor. The MCP server exposes **10 tools** because several categories carry multiple probes (e.g. hard-gate flip rate, scale monotonicity, and tokenizer-exact context margin are each their own tool) plus a `derive_adaptation_plan` tool that turns measurements into a plan. The canonical tool list lives in [docs/generated/claims.md](docs/generated/claims.md).
-
-
-| Probe | What it tells you | Default cost |
-|---|---|---|
-| **Judge consistency** | Same (response, rubric) scored N times → `1 − coefficient-of-variation`. Low = noisy judge, you should `rescore_count > 1`. | 3 judge API calls |
-| **Endpoint schema reliability** | Fraction of STRICT_SCHEMA probes that parse. `< 0.9` triggers JSON_OBJECT fallback. | 0–3 API calls (caller-provided) |
-| **Context budget margin** | `1 − (approx_tokens / context_window)`. Negative = overflow risk. | 0 (pure computation) |
-| **Performance projection** | Mean latency × dataset size × candidates → projected wall time. | 1 judge call (latency probe) |
-| **Noise floor** | Stdev of fitness under identical params. Sets adaptive `min_kc4`. | 0 API calls (caller supplies samples) |
-
-Total `empirical_preflight()` default budget: **~4 API calls**. Under $0.01 on frontier tiers.
-
-## Install
+> The short version. Full doc: [README.md](README.md) · 한국어 Easy: [EASY_README_KR.md](EASY_README_KR.md)
 
 ```bash
 pip install mini-omega-lock
 ```
 
-Requires `omegaprompt>=1.1.0` (it imports omegaprompt's preflight contracts to build the records it emits).
+## The one-sentence pitch
 
-## The minimum working example
+**Your prompt-eval improvement might be smaller than your judge's own noise — and then it isn't a real improvement.** mini-omega-lock measures that noise before you trust an A/B result.
+
+## What's the "noise floor"?
+
+An LLM judge doesn't score the *same* answer the *same* way every time. Grade one fixed answer five times → five slightly different scores. That wobble is the judge's **noise floor**.
+
+The rule: **if prompt B beats prompt A by less than that wobble, your "win" is noise.** You'd ship B but you measured a coin flip. This tool gives you the floor number first, so you know whether your delta is real.
+
+## 30-second use
+
+```bash
+# No Python needed — one CI-friendly number:
+preflight --provider anthropic --rubric rubric.json \
+          --probe-item item.json --probe-response "4" --summary
+# -> {"judge_noise_floor": 0.07, "schema_reliability": 0.0, ...}
+```
 
 ```python
-from omegaprompt import make_provider, PreflightReport, derive_adaptation_plan
-from omegaprompt.domain.dataset import DatasetItem
-from omegaprompt.domain.judge import Dimension, JudgeRubric
-from omegaprompt.judges.llm_judge import LLMJudge
-from mini_omega_lock import empirical_preflight
-
-judge_provider = make_provider("anthropic")
-judge  = LLMJudge(provider=judge_provider)
-rubric = JudgeRubric(dimensions=[Dimension(name="accuracy", description="correct?", weight=1.0)])
-probe  = DatasetItem(id="probe", input="2+2", reference="4")
-
+from mini_omega_lock import empirical_preflight, judge_noise_floor
+# ... build a judge + rubric + probe item (see README.md quick start) ...
 judge_quality, endpoint, performance, warnings = empirical_preflight(
-    judge=judge,
-    rubric=rubric,
-    probe_item=probe,
-    probe_response="4",
-    consistency_repeats=3,   # default
+    judge=judge, rubric=rubric, probe_item=probe,
+    probe_response="4", consistency_repeats=5,
 )
-for w in warnings:
-    print(f"[mini-omega-lock] {w}")
-
-# Feed into omegaprompt's adaptation layer:
-report = PreflightReport(judge_quality=judge_quality, endpoint=endpoint, performance=performance)
-plan   = derive_adaptation_plan(report=report)
-# plan.min_kc4_override, plan.rescore_count, plan.schema_mode_override, etc.
+print(judge_noise_floor(judge_quality))   # e.g. 0.07
 ```
 
-That's it. 4 live API calls. `plan` tells omegaprompt what to adjust. The `warnings` list names every field that fell back to a fail-closed default — treat it as load-bearing in CI.
+`judge_noise_floor` is `1 - consistency`. `0.0` = the judge never disagreed with itself. Bigger = you need a bigger A/B delta before a win is believable. Cost: ~5 cheap API calls.
 
-## Exported functions
+## It also checks (same pass)
 
-The full public API lives in `mini_omega_lock.__all__`; the regenerated list is in [docs/generated/claims.md](docs/generated/claims.md). The five most common entry points:
+| Check | What it tells you |
+|---|---|
+| **Judge noise floor** | The headline: how much the judge disagrees with itself. |
+| **Schema reliability** | Fraction of STRICT_SCHEMA calls that parse. `< 0.9` → fall back to JSON. Catches *silent* failures too. |
+| **Context budget margin** | How close your biggest call is to the context limit. Negative = overflow. |
+| **Wall-time projection** | How long a full run will take, before you start it. |
 
-```python
-from mini_omega_lock import (
-    empirical_preflight,            # composite: runs all probes, returns 4-tuple incl. warnings
-    measure_judge_consistency,      # individual: returns (JudgeQualityMeasurement, raw scores)
-    probe_strict_schema,            # individual: returns EndpointMeasurement
-    compute_context_margin,         # pure compute: returns float (chars heuristic)
-    noise_floor_estimate,           # pure compute: returns float stdev
-)
+Any check it *couldn't* run **fails closed** (returns a safe-looking `0.0` but warns you). The `warnings` list tells "measured zero" apart from "never measured" — read it in CI.
+
+## Works with omegaprompt — or alone
+
+- **Alone:** the noise-floor + schema-reliability numbers are useful on their own. Run `preflight`, gate your CI on the result.
+- **With [omegaprompt](https://pypi.org/project/omegaprompt/):** the records it emits feed omegaprompt's `derive_adaptation_plan`, which auto-tunes calibration thresholds to your infra. mini-omega-lock is the probe; omegaprompt is the engine it feeds. (Installing this pulls omegaprompt in — it's a hard dependency.)
+
+## CLI extras for CI
+
+```bash
+preflight ... --scorecard html --scorecard-out preflight.html   # a PR artifact
+preflight ... --fail-over-noise-floor 0.10                       # fail the build if too noisy
+preflight ... --fail-under-schema-reliability 0.90              # fail if endpoint flaky
 ```
 
-Also exported and equally importable: `compute_context_margin_from_texts` (tokenizer-exact variant), `measure_gate_flip_rate`, `measure_scale_monotonicity`, `project_performance`. Use `empirical_preflight` for the default flow; call the individuals when you want finer control (e.g., compute noise floor from your own fitness samples across multiple calibration runs).
-
-## When to use it
-
-- Judge-consistency suspicion: you've seen the same response get different scores.
-- Local or OpenAI-compatible endpoint: you can't trust its STRICT_SCHEMA support.
-- Long-running calibrations: you want a wall-time estimate before committing.
+Exit codes: `0` good · `2` something couldn't be measured · `3` a value breached a `--fail-*` bound · `1` usage error.
 
 ## When to skip it
 
-- Stock frontier providers + LLMJudge on known-stable tiers. Defaults are fine.
-- You're in rapid iteration — preflight adds ~10s to every run.
-- Tests / CI without API access (omegaprompt runs fine with declared defaults).
-
-## One caveat: the noise floor
-
-`empirical_preflight` **does not compute noise floor**. The `PerformanceMeasurement.noise_floor` it returns is a placeholder (0.0). True noise floor requires multiple complete calibration runs with identical params — you do those, collect the fitness samples, then call `noise_floor_estimate(samples)` separately and patch the plan.
-
-This is by design, not a bug: a single preflight probe can't measure it.
+- Stock frontier providers on known-stable tiers — defaults are fine.
+- Rapid iteration (it adds ~10s per run).
+- Tests / CI with no API access (omegaprompt runs fine on declared defaults).
 
 ## Go deeper
 
-- Full contract definitions: `omegaprompt.preflight.contracts` (in the omegaprompt package)
-- Adaptation rules: `omegaprompt.preflight.adaptation.derive_adaptation_plan`
-- Sibling analytical preflight (zero API calls, deterministic rules): [mini-antemortem-cli](https://pypi.org/project/mini-antemortem-cli/)
+- Full README: [README.md](README.md)
+- Contract definitions: `omegaprompt.preflight.contracts`
+- Analytical, zero-API sibling: [mini-antemortem-cli](https://pypi.org/project/mini-antemortem-cli/)
 
-License: Apache 2.0. Copyright (c) 2026 hibou.
+License: Apache 2.0. Copyright (c) 2026 Kyunghoon Gwak.

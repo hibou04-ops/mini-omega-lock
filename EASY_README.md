@@ -6,6 +6,29 @@
 pip install mini-omega-lock
 ```
 
+## Start here · Standalone use · Integration/Docking
+
+**Omega Aile** — Quiet precision. AI research guided by evidence.
+
+Probe judge consistency, schema behavior, context margin and run projections before a calibration. This is a separately distributed measurement tool.
+
+Requires Python 3.11+. Installation needs internet.
+
+```bash
+python -m pip install mini-omega-lock==0.7.1
+preflight --help
+python -c "from mini_omega_lock import compute_context_margin; print(compute_context_margin(system_prompt_chars=0, rubric_chars=0, longest_input_chars=380, longest_reference_chars=0, longest_response_chars=0, context_window_tokens=1000))"
+```
+
+The offline API example prints 0.9: a character-based context projection, not an exact tokenizer measurement or model-quality result. Full preflight CLI probes require the selected provider infrastructure. Unmeasured warnings give exit 2; threshold breaches give 3; usage/runtime errors give 1. Exit 0 means requested measurements ran, not that their values are acceptable.
+
+omegaprompt>=1.1.0 is required and installed automatically; no calibration pipeline is needed to use the probes. The supported current combination is omegaprompt 2.1.2. Pack judge_quality, endpoint, performance and warnings into PreflightReport, then derive_adaptation_plan. The package is not the omega-lock search engine.
+
+[Docking contracts and runnable data handoff](https://github.com/hibou04-ops/omega-lock/blob/main/DOCKING.md) · [Full guide](README.md).
+
+MCP: install the distribution with `[mcp]` and use its existing server executable. FastMCP support is bounded to MCP SDK `>=1.0.0,<2.0.0`; the tool names and schemas are unchanged.
+
+
 ## The one-sentence pitch
 
 **Your prompt-eval improvement might be smaller than your judge's own noise — and then it isn't a real improvement.** mini-omega-lock measures that noise before you trust an A/B result.
@@ -14,7 +37,7 @@ pip install mini-omega-lock
 
 An LLM judge doesn't score the *same* answer the *same* way every time. Grade one fixed answer five times → five slightly different scores. That wobble is the judge's **noise floor**.
 
-The rule: **if prompt B beats prompt A by less than that wobble, your "win" is noise.** You'd ship B but you measured a coin flip. This tool gives you the floor number first, so you know whether your delta is real.
+The rule: **if prompt B beats prompt A by less than that wobble, gather more evidence before accepting the win.** You'd ship B but you measured a coin flip. This tool gives you the floor number first, so you know whether your delta is real.
 
 ## 30-second use
 

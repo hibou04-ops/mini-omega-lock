@@ -12,15 +12,38 @@ pip install mini-omega-lock
 [![License](https://img.shields.io/pypi/l/mini-omega-lock.svg?cacheSeconds=3600)](LICENSE)
 [![Parent](https://img.shields.io/badge/parent-omegaprompt%E2%89%A51.1.0-blueviolet.svg?cacheSeconds=3600)](https://pypi.org/project/omegaprompt/)
 
+## Start here · Standalone use · Integration/Docking
+
+**Omega Aile** — Quiet precision. AI research guided by evidence.
+
+Probe judge consistency, schema behavior, context margin and run projections before a calibration. This is a separately distributed measurement tool.
+
+Requires Python 3.11+. Installation needs internet.
+
+```bash
+python -m pip install mini-omega-lock==0.7.1
+preflight --help
+python -c "from mini_omega_lock import compute_context_margin; print(compute_context_margin(system_prompt_chars=0, rubric_chars=0, longest_input_chars=380, longest_reference_chars=0, longest_response_chars=0, context_window_tokens=1000))"
+```
+
+The offline API example prints 0.9: a character-based context projection, not an exact tokenizer measurement or model-quality result. Full preflight CLI probes require the selected provider infrastructure. Unmeasured warnings give exit 2; threshold breaches give 3; usage/runtime errors give 1. Exit 0 means requested measurements ran, not that their values are acceptable.
+
+omegaprompt>=1.1.0 is required and installed automatically; no calibration pipeline is needed to use the probes. The supported current combination is omegaprompt 2.1.2. Pack judge_quality, endpoint, performance and warnings into PreflightReport, then derive_adaptation_plan. The package is not the omega-lock search engine.
+
+[Docking contracts and runnable data handoff](https://github.com/hibou04-ops/omega-lock/blob/main/DOCKING.md) · [Full guide](README.md).
+
+MCP: install the distribution with `[mcp]` and use its existing server executable. FastMCP support is bounded to MCP SDK `>=1.0.0,<2.0.0`; the tool names and schemas are unchanged.
+
+
 ## What is the "noise floor"?
 
 An LLM judge does not give the *same* response the *same* score every time. Ask it to grade one fixed `(response, rubric)` pair five times and you'll often get five slightly different scores. That spread is the **judge's noise floor**.
 
 It matters because of one rule:
 
-> **An optimization delta smaller than your judge's own noise is not real.**
+> **A small delta relative to observed judge variability needs more evidence before acceptance.**
 
-If prompt B scores 0.4% better than prompt A, but your judge swings 1.2% when re-grading the *identical* answer, your "win" is inside the noise. You'd ship B, but you measured a coin flip. mini-omega-lock fires a few cheap probe calls and tells you that floor number *before* you trust the A/B delta.
+If prompt B scores 0.4% better than prompt A, but your judge swings 1.2% when re-grading the *identical* answer, your delta needs additional evidence. You'd ship B, but you measured a coin flip. mini-omega-lock fires a few cheap probe calls and tells you that floor number *before* you trust the A/B delta.
 
 ```bash
 # One number, no Python, CI-friendly exit codes:
@@ -54,7 +77,7 @@ for w in warnings:                 # fail-closed warnings are load-bearing
     print("[mini-omega-lock]", w)
 ```
 
-That's ~5 cheap API calls (under $0.01 on frontier tiers). `judge_noise_floor` is `1 - consistency`: `0.0` = the judge never disagreed with itself; the bigger the number, the larger the A/B delta you need before a "win" is believable.
+That's ~5 cheap API calls (cost depends on provider pricing and token usage). `judge_noise_floor` is `1 - consistency`: `0.0` = the judge never disagreed with itself; the bigger the number, the larger the A/B delta you need before a "win" is believable.
 
 ## Works with omegaprompt — and standalone
 
@@ -71,7 +94,7 @@ It depends on `omegaprompt` (`>=1.1.0`) to build those records, so `pip install 
 | Catches deltas smaller than judge noise | no — you ship coin flips | **yes** — flagged before you trust them |
 | Flags silent strict-schema degradation | no | **yes** (`silent_degradation_detected`) |
 | Estimates wall time before a long run | no | **yes** |
-| Cost | free, but misleading | ~5 cheap API calls (< $0.01) |
+| Cost | free, but misleading | ~5 cheap API calls (provider-dependent) |
 
 ## What it measures
 

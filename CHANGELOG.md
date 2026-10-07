@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.1 - 2026-10-08
+
+Bound FastMCP to SDK >=1,<2. Add installed offline context projection and explicit warning-preserving PreflightReport handoff. Clarify measurement exit codes, separate packaging, and evidence limits; remove fixed live-cost promises.
+
+Compatibility: no renamed imports, CLI/MCP identifiers, schemas or relaxed gates.
+Upgrade with the same PyPI distribution name; MCP users reinstall its [mcp] extra.
+
+
 All notable changes to `mini-omega-lock` are documented here. This
 project adheres to [Semantic Versioning](https://semver.org/).
 

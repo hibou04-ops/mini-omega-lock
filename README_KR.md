@@ -14,6 +14,27 @@ pip install mini-omega-lock
 
 > 본 페이지는 [README.md](README.md)(영문)의 한국어 미러본입니다. 식별자 / 명령 / 함수명은 번역하지 않습니다. 짧은 도입은 [EASY_README_KR.md](EASY_README_KR.md).
 
+## 시작 · 단독 사용 · 도킹
+
+**Omega Aile** — Quiet precision. AI research guided by evidence.
+
+보정 전에 judge 일관성·스키마 동작·컨텍스트 여유·실행량을 점검합니다. 단독 probe 사용도 omegaprompt 패키지를 설치합니다.
+
+Python 3.11 이상에서 실행합니다. 설치에는 인터넷이 필요합니다.
+
+```bash
+python -m pip install mini-omega-lock==0.7.1
+preflight --help
+python -c "from mini_omega_lock import compute_context_margin; print(compute_context_margin(system_prompt_chars=0, rubric_chars=0, longest_input_chars=380, longest_reference_chars=0, longest_response_chars=0, context_window_tokens=1000))"
+```
+
+API 예제 결과 0.9는 문자 수 기반 컨텍스트 추정치입니다. 실제 tokenizer 측정이나 모델 성능 결과가 아닙니다. CLI probe에는 provider 환경이 필요합니다. 미측정 경고는 종료 2, 임계값 위반은 3, 오류는 1입니다. 종료 0만으로 측정값의 적합성을 판단하면 안 됩니다.
+
+[실제 연결 방식과 입력·출력](https://github.com/hibou04-ops/omega-lock/blob/main/DOCKING.md) · [전체 안내](README.md). 두 mini 도구의 현재 검증 조합은 omegaprompt 2.1.2이며, 별도 배포 패키지입니다.
+
+MCP는 해당 배포명의 `[mcp]` extras와 기존 서버 명령을 사용합니다. 기존 FastMCP 계약은 SDK `>=1.0.0,<2.0.0` 범위로 유지합니다.
+
+
 ## "noise floor"가 뭔가요?
 
 LLM judge는 *같은* 응답에 *같은* 점수를 매번 주지 않습니다. 고정된 `(response, rubric)` 하나를 다섯 번 채점시키면 미묘하게 다른 다섯 개의 점수가 나오곤 합니다. 그 산포가 바로 **judge의 noise floor**입니다.
@@ -22,7 +43,7 @@ LLM judge는 *같은* 응답에 *같은* 점수를 매번 주지 않습니다. �
 
 > **judge 자신의 noise보다 작은 최적화 delta는 진짜가 아니다.**
 
-프롬프트 B가 A보다 0.4% 좋게 나왔는데, judge가 *동일한* 답을 재채점할 때 1.2%씩 흔들린다면, 그 "승리"는 noise 안에 있습니다. B를 배포하겠지만 실제로 측정한 건 동전 던지기입니다. mini-omega-lock은 저렴한 probe call 몇 번으로 A/B delta를 믿기 *전에* 그 floor 수치를 알려줍니다.
+프롬프트 B가 A보다 0.4% 좋게 나왔는데, judge가 *동일한* 답을 재채점할 때 1.2%씩 흔들린다면, 그 "승리"는 noise 안에 있습니다. B를 배포하겠지만 실제로 반복 측정과 독립 검증이 필요합니다입니다. mini-omega-lock은 저렴한 probe call 몇 번으로 A/B delta를 믿기 *전에* 그 floor 수치를 알려줍니다.
 
 ```bash
 # 한 숫자, Python 불필요, CI 친화적 exit code:
@@ -73,7 +94,7 @@ for w in warnings:                 # fail-closed warnings는 load-bearing
 | judge noise보다 작은 delta를 잡음 | no — 동전 던지기를 배포 | **yes** — 믿기 전에 표시 |
 | silent strict-schema 저하를 표시 | no | **yes** (`silent_degradation_detected`) |
 | 긴 실행 전 wall time 추정 | no | **yes** |
-| 비용 | 무료지만 오도함 | probe ~5회 (< $0.01) |
+| 비용 | 무료지만 오도함 | probe ~5회 (provider-dependent) |
 
 ## 측정하는 것
 

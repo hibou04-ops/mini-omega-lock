@@ -6,15 +6,36 @@
 pip install mini-omega-lock
 ```
 
+## 시작 · 단독 사용 · 도킹
+
+**Omega Aile** — Quiet precision. AI research guided by evidence.
+
+보정 전에 judge 일관성·스키마 동작·컨텍스트 여유·실행량을 점검합니다. 단독 probe 사용도 omegaprompt 패키지를 설치합니다.
+
+Python 3.11 이상에서 실행합니다. 설치에는 인터넷이 필요합니다.
+
+```bash
+python -m pip install mini-omega-lock==0.7.1
+preflight --help
+python -c "from mini_omega_lock import compute_context_margin; print(compute_context_margin(system_prompt_chars=0, rubric_chars=0, longest_input_chars=380, longest_reference_chars=0, longest_response_chars=0, context_window_tokens=1000))"
+```
+
+API 예제 결과 0.9는 문자 수 기반 컨텍스트 추정치입니다. 실제 tokenizer 측정이나 모델 성능 결과가 아닙니다. CLI probe에는 provider 환경이 필요합니다. 미측정 경고는 종료 2, 임계값 위반은 3, 오류는 1입니다. 종료 0만으로 측정값의 적합성을 판단하면 안 됩니다.
+
+[실제 연결 방식과 입력·출력](https://github.com/hibou04-ops/omega-lock/blob/main/DOCKING.md) · [전체 안내](README.md). 두 mini 도구의 현재 검증 조합은 omegaprompt 2.1.2이며, 별도 배포 패키지입니다.
+
+MCP는 해당 배포명의 `[mcp]` extras와 기존 서버 명령을 사용합니다. 기존 FastMCP 계약은 SDK `>=1.0.0,<2.0.0` 범위로 유지합니다.
+
+
 ## 한 문장 요약
 
-**당신의 prompt-eval 개선폭이 judge 자신의 noise보다 작을 수 있고, 그러면 진짜 개선이 아닙니다.** mini-omega-lock은 A/B 결과를 믿기 전에 그 noise를 측정합니다.
+**당신의 prompt-eval 개선폭이 judge 자신의 noise보다 작을 수 있고, 그러면 추가 검증이 필요합니다.** mini-omega-lock은 A/B 결과를 믿기 전에 그 noise를 측정합니다.
 
 ## "noise floor"가 뭔가요?
 
 LLM judge는 *같은* 답에 *같은* 점수를 매번 주지 않습니다. 고정된 답 하나를 다섯 번 채점 → 미묘하게 다른 다섯 점수. 그 흔들림이 judge의 **noise floor**입니다.
 
-규칙: **프롬프트 B가 A를 그 흔들림보다 작은 폭으로 이기면, 그 "승리"는 noise입니다.** B를 배포하겠지만 측정한 건 동전 던지기. 이 도구는 floor 수치를 먼저 줘서 당신 delta가 진짜인지 알려줍니다.
+규칙: **프롬프트 B가 A를 그 흔들림보다 작은 폭으로 이기면, 그 결과는 추가 근거가 필요합니다.** B를 배포하겠지만 반복 측정과 독립 검증이 필요합니다. 이 도구는 floor 수치를 먼저 줘서 당신 delta가 진짜인지 알려줍니다.
 
 ## 30초 사용법
 

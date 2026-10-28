@@ -56,18 +56,18 @@ judge_quality, endpoint, performance, warnings = empirical_preflight(
 print(judge_noise_floor(judge_quality))   # 예: 0.07
 ```
 
-`judge_noise_floor`는 `1 - consistency`. `0.0`이면 judge가 자기와 한 번도 어긋나지 않은 것. 숫자가 클수록 승리를 믿으려면 더 큰 A/B delta가 필요. 비용: 저렴한 API 호출 ~5번.
+`judge_noise_floor`는 clipped 상대 CV (`1 - consistency`)이며 절대 A/B 효과 크기의 기준이 아닙니다. 기본 공유 judge/gate 배치는 실제 관측 5개를 사용하며 전체 비용은 추가 probe와 provider 가격에 따라 달라집니다.
 
 ## 같은 패스에서 함께 확인
 
 | 항목 | 뭘 알려주나 |
 |---|---|
 | **Judge noise floor** | headline: judge가 자기와 얼마나 어긋나나. |
-| **Schema reliability** | STRICT_SCHEMA 호출 중 parse되는 비율. `< 0.9` → JSON fallback. silent 실패도 잡음. |
+| **Schema reliability** | STRICT_SCHEMA parse 성공 비율과 silent 실패. JSON fallback은 advisory 권고이며 runtime 자동 적용이 아님. |
 | **Context budget margin** | 가장 큰 호출이 context 한계에 얼마나 가까운가. 음수 = overflow. |
 | **Wall-time projection** | 전체 실행이 시작 전에 얼마나 걸릴지. |
 
-실행 *못 한* 항목은 **fail-closed** (안전해 보이는 `0.0`을 주되 warning). `warnings` 리스트가 "측정된 0"과 "측정 안 함"을 구분해줍니다 — CI에서 읽으세요.
+미측정 숫자는 fail-closed 기본값을 사용합니다. `warnings.measurement_status`를 우선 읽고 `probe_accounting`도 보존하세요. 경고 문자열 추론은 구형 결과의 호환 경로이며 과거 측정 완료를 입증하지 않습니다.
 
 ## omegaprompt와 함께 — 또는 단독으로
 

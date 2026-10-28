@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.1 - 2026-10-28
+
+MCP empirical_preflight의 등록 설명에서 호출 수를 consistency_repeats만으로 안내하던 오류를 교정했습니다. judge-mode gate가 있으면 공유 배치는 max(consistency_repeats, max(2, gate_flip_repeats))이며, 기본 3/5 반복은 실제 관측 5개를 사용합니다. 선택한 schema·monotonic probe의 추가 요청과 실패 attempt accounting, 관측할 수 없는 provider 내부 재시도·반환되지 않은 비용도 설명합니다. 영문 EASY 안내서의 schema fallback도 자동 실행이 아닌 advisory 권고로 바로잡았습니다.
+
+0.8.0의 모든 기능을 포함하는 설명 수정 전용 patch입니다. 실제 호출·상태·반환 계약은 변경하지 않았으며 0.8.0의 태그·Release·공개 패키지와 과거 측정 근거는 그대로 보존합니다. 기존 전후 결과의 근거는 [0.8.0 검증 기록](docs/upgrade-0.8.0.md)을 참조하세요.
+
 ## 0.8.0 - 2026-10-28
 
 실제 judge 관측을 consistency/gate flip에 공유하고 표본 provenance와 실패 비용을 기록합니다. 기존 4-tuple을 보존하며 측정 상태·accounting을 CLI/MCP/PreflightReport로 전달합니다. clipped CV를 A/B 유의성 판정처럼 설명하던 문구를 교정하고 미측정 threshold와 측정 실패를 구분합니다.

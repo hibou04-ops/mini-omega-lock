@@ -1,0 +1,29 @@
+{
+  "kind": "deterministic development workload; not blinded or live model evidence",
+  "cases": [
+    {
+      "consistency_repeats": 3,
+      "gate_flip_repeats": 5,
+      "actual_judge_calls": 8,
+      "consistency_samples": 3,
+      "consistency": 1.0,
+      "observation_batches": null
+    },
+    {
+      "consistency_repeats": 7,
+      "gate_flip_repeats": 3,
+      "actual_judge_calls": 10,
+      "consistency_samples": 7,
+      "consistency": 1.0,
+      "observation_batches": null
+    },
+    {
+      "consistency_repeats": 3,
+      "gate_flip_repeats": 0,
+      "actual_judge_calls": 3,
+      "consistency_samples": 3,
+      "consistency": 1.0,
+      "observation_batches": null
+    }
+  ]
+}

@@ -74,3 +74,7 @@ Noise floor는 호출자가 제공한 `fitness_samples`로부터 계산됩니다
 ## 본 문서에 이의 제기
 
 위 claim 중 source code나 테스트가 뒷받침하지 않는 항목을 발견하면 release-blocker 버그로 간주합니다. `.github/ISSUE_TEMPLATE/claim_drift.md`를 사용해 위반 라인과 source-of-truth 위치를 명시하여 보고하세요.
+
+## 0.8.0 범위 정정
+
+상태·검증·호환성의 최신 계약은 [upgrade-0.8.0.md](upgrade-0.8.0.md)에 있습니다. 실패 요청 시간은 성공 latency projection에서 제외하되 accounting 전체 비용에는 포함합니다. 공유 관측의 표본 수는 독립 표본 수로 합산하지 않습니다. 단일 항목 CV와 aggregate fitness 표준편차는 A/B 유의성 검정이 아닙니다.

@@ -36,11 +36,67 @@
     "samples": 3,
     "scale_monotonic": false
   },
+  "measurement_status": {
+    "anchoring_usage": "measured",
+    "context_budget_margin": "estimated",
+    "fitness_noise_floor": "unmeasured",
+    "gate_flip_rate": "measured",
+    "judge_consistency": "measured",
+    "mean_call_latency_ms": "measured",
+    "scale_monotonic": "unmeasured",
+    "schema_reliability": "unmeasured",
+    "silent_degradation_detected": "unmeasured"
+  },
   "performance": {
     "mean_call_latency_ms": "<masked: timing>",
     "noise_floor": 0.0,
     "projected_wall_time_seconds": "<masked: timing>"
   },
+  "probe_accounting": {
+    "attempted_calls": 5,
+    "elapsed_ms": "<masked: timing>",
+    "failed_call_usage_unknown": false,
+    "failed_calls": 0,
+    "gate_flip_rates": {
+      "no_refusal": {
+        "flip_rate": 0.0,
+        "majority": true,
+        "passes": 5,
+        "samples": 5
+      }
+    },
+    "observation_batches": {
+      "shared_judge": {
+        "consistency_samples": 3,
+        "gate_samples": 5,
+        "observed": 5,
+        "requested": 5,
+        "shared_prefix": 3
+      }
+    },
+    "provider_internal_retries": null,
+    "successful_calls": 5,
+    "successful_usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 250,
+      "output_tokens": 50
+    },
+    "total_elapsed_ms": "<masked: timing>"
+  },
+  "quality_assessment": "not_requested",
+  "quality_thresholds_configured": false,
+  "required_measurements": [
+    "anchoring_usage",
+    "context_budget_margin",
+    "fitness_noise_floor",
+    "gate_flip_rate",
+    "judge_consistency",
+    "mean_call_latency_ms",
+    "scale_monotonic",
+    "schema_reliability",
+    "silent_degradation_detected"
+  ],
   "summary": {
     "all_fields_measured": false,
     "anchoring_usage": 0.0,
@@ -50,6 +106,31 @@
     "fitness_noise_floor": 0.0,
     "judge_consistency": 1.0,
     "judge_noise_floor": 0.0,
+    "judge_relative_variability": 0.0,
+    "measurement_status": {
+      "anchoring_usage": "measured",
+      "context_budget_margin": "estimated",
+      "fitness_noise_floor": "unmeasured",
+      "gate_flip_rate": "measured",
+      "judge_consistency": "measured",
+      "mean_call_latency_ms": "measured",
+      "scale_monotonic": "unmeasured",
+      "schema_reliability": "unmeasured",
+      "silent_degradation_detected": "unmeasured"
+    },
+    "quality_assessment": "not_requested",
+    "quality_thresholds_configured": false,
+    "required_measurements": [
+      "anchoring_usage",
+      "context_budget_margin",
+      "fitness_noise_floor",
+      "gate_flip_rate",
+      "judge_consistency",
+      "mean_call_latency_ms",
+      "scale_monotonic",
+      "schema_reliability",
+      "silent_degradation_detected"
+    ],
     "scale_monotonic": false,
     "schema_reliability": 0.0,
     "schema_version": "mini-omega-lock/summary/v1",

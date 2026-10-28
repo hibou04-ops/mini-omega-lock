@@ -74,3 +74,7 @@ The noise floor is computed from caller-supplied `fitness_samples`. The `empiric
 ## How to challenge this document
 
 If you find a claim above that the source code or tests do not back up, that is a release-blocker bug. File it via `.github/ISSUE_TEMPLATE/claim_drift.md` with the offending line and the source-of-truth location that contradicts it.
+
+## 0.8.0 범위 정정
+
+상태·검증·호환성의 최신 계약은 [upgrade-0.8.0.md](upgrade-0.8.0.md)에 있습니다. 실패 요청 시간은 성공 latency projection에서 제외하되 accounting 전체 비용에는 포함합니다. 공유 관측의 표본 수는 독립 표본 수로 합산하지 않습니다. 단일 항목 CV와 aggregate fitness 표준편차는 A/B 유의성 검정이 아닙니다.

@@ -164,6 +164,26 @@ def resolve_token_counter(spec: str | None) -> Callable[[str], int] | None:
 # Core run
 # ---------------------------------------------------------------------------
 
+_MEASUREMENT_FIELDS = (
+    "judge_consistency", "anchoring_usage", "gate_flip_rate", "scale_monotonic",
+    "schema_reliability", "silent_degradation_detected", "context_budget_margin",
+    "mean_call_latency_ms", "fitness_noise_floor",
+)
+
+
+def _required_measurements(args: argparse.Namespace) -> list[str]:
+    selected = getattr(args, "require_measurements", None)
+    fields = list(_MEASUREMENT_FIELDS) if selected is None else [x.strip() for x in selected.split(",") if x.strip()]
+    unknown = set(fields) - set(_MEASUREMENT_FIELDS)
+    if not fields or unknown:
+        raise ValueError(f"--require-measurements expects known field names; unknown: {sorted(unknown)}")
+    for flag, field in (("fail_over_noise_floor", "judge_consistency"),
+                        ("fail_under_schema_reliability", "schema_reliability"),
+                        ("fail_under_context_margin", "context_budget_margin")):
+        if getattr(args, flag, None) is not None and field not in fields:
+            fields.append(field)
+    return sorted(set(fields))
+
 
 def _run_preflight(args: argparse.Namespace) -> dict[str, Any]:
     """Execute the preflight + adaptation plan, returning a serializable dict."""
@@ -191,21 +211,43 @@ def _run_preflight(args: argparse.Namespace) -> dict[str, Any]:
         fitness_samples=fitness_samples,
     )
 
-    report = PreflightReport(judge_quality=judge_q, endpoint=endpoint, performance=perf)
+    measurement_status = dict(getattr(warnings, "measurement_status", {}))
+    probe_accounting = dict(getattr(warnings, "probe_accounting", {}))
+    extra = {k: v for k, v in {"measurement_status": measurement_status, "probe_accounting": probe_accounting}.items()
+             if k in PreflightReport.model_fields}
+    report = PreflightReport(judge_quality=judge_q, endpoint=endpoint, performance=perf, warnings=list(warnings), **extra)
     plan = derive_adaptation_plan(report=report)
 
     from mini_omega_lock.summary import build_summary
 
+    summary = build_summary(judge_q, endpoint, perf, warnings)
+    thresholds_configured = any(getattr(args, flag, None) is not None for flag in (
+        "fail_over_noise_floor", "fail_under_schema_reliability", "fail_under_context_margin"))
+    threshold_fields = [field for flag, field in (
+        ("fail_over_noise_floor", "judge_consistency"),
+        ("fail_under_schema_reliability", "schema_reliability"),
+        ("fail_under_context_margin", "context_budget_margin")) if getattr(args, flag, None) is not None]
+    assessment = "not_requested" if not thresholds_configured else (
+        "unmeasured" if any(measurement_status.get(field) != "measured" for field in threshold_fields)
+        else ("fail" if _threshold_breaches(summary, args) else "pass"))
+    summary.update(required_measurements=_required_measurements(args),
+                   quality_thresholds_configured=thresholds_configured,
+                   quality_assessment=assessment)
     return {
         "judge_quality": judge_q.model_dump(mode="json"),
         "endpoint": endpoint.model_dump(mode="json"),
         "performance": perf.model_dump(mode="json"),
         "warnings": list(warnings),
+        "measurement_status": measurement_status,
+        "probe_accounting": probe_accounting,
+        "required_measurements": _required_measurements(args),
+        "quality_thresholds_configured": thresholds_configured,
+        "quality_assessment": assessment,
         "adaptation_plan": plan.model_dump(mode="json"),
         # Flat, byte-stable headline summary (timing excluded). Always
         # computed so --summary / --scorecard / threshold gates can read it
         # without re-running the probe.
-        "summary": build_summary(judge_q, endpoint, perf, warnings),
+        "summary": summary,
     }
 
 
@@ -226,21 +268,21 @@ def _threshold_breaches(summary: dict[str, Any], args: argparse.Namespace) -> li
     breaches to stderr so a CI log names exactly which bound failed.
     """
     breaches: list[str] = []
-    if args.fail_over_noise_floor is not None:
+    if args.fail_over_noise_floor is not None and summary.get("measurement_status", {}).get("judge_consistency", "measured") == "measured":
         nf = float(summary["judge_noise_floor"])
         if nf > args.fail_over_noise_floor:
             breaches.append(
                 f"judge_noise_floor {nf:.6f} exceeds --fail-over-noise-floor "
                 f"{args.fail_over_noise_floor:.6f}"
             )
-    if args.fail_under_schema_reliability is not None:
+    if args.fail_under_schema_reliability is not None and summary.get("measurement_status", {}).get("schema_reliability", "measured") == "measured":
         sr = float(summary["schema_reliability"])
         if sr < args.fail_under_schema_reliability:
             breaches.append(
                 f"schema_reliability {sr:.6f} is below "
                 f"--fail-under-schema-reliability {args.fail_under_schema_reliability:.6f}"
             )
-    if args.fail_under_context_margin is not None:
+    if args.fail_under_context_margin is not None and summary.get("measurement_status", {}).get("context_budget_margin", "measured") == "measured":
         cm = float(summary["context_budget_margin"])
         if cm < args.fail_under_context_margin:
             breaches.append(
@@ -280,7 +322,7 @@ def _render_json(result: dict[str, Any]) -> str:
 def _render_jsonl(result: dict[str, Any]) -> str:
     # Two lines: the measurement report, then the adaptation plan, so a
     # streaming consumer can read them independently.
-    report = {k: result[k] for k in ("judge_quality", "endpoint", "performance", "warnings")}
+    report = {k: result[k] for k in ("judge_quality", "endpoint", "performance", "warnings", "measurement_status", "probe_accounting", "required_measurements", "quality_thresholds_configured", "quality_assessment")}
     plan = {"adaptation_plan": result["adaptation_plan"]}
     return (
         json.dumps(report, ensure_ascii=False, sort_keys=True)
@@ -336,6 +378,10 @@ def build_parser() -> argparse.ArgumentParser:
         dest="probe_response",
         required=True,
         help="Canonical correct response string for the probe item.",
+    )
+    parser.add_argument(
+        "--require-measurements", default=None,
+        help="Comma-separated measurement fields required for exit 0; default all. Threshold fields are always required.",
     )
     parser.add_argument(
         "--consistency-repeats",
@@ -440,6 +486,14 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
+        _required_measurements(args)  # Reject misspellings before provider calls.
+        from math import isfinite
+        for name in ("fail_over_noise_floor", "fail_under_schema_reliability"):
+            value = getattr(args, name)
+            if value is not None and (not isfinite(value) or not 0 <= value <= 1):
+                raise ValueError(f"--{name.replace('_', '-')} must be finite and in [0, 1]")
+        if args.fail_under_context_margin is not None and not isfinite(args.fail_under_context_margin):
+            raise ValueError("--fail-under-context-margin must be finite")
         result = _run_preflight(args)
     except ValueError as exc:
         print(f"preflight: input error: {exc}", file=sys.stderr)
@@ -483,6 +537,12 @@ def main(argv: list[str] | None = None) -> int:
             print(f"preflight: threshold breach: {b}", file=sys.stderr)
         return EXIT_THRESHOLD
 
+    statuses = result.get("measurement_status", {})
+    if statuses and args.require_measurements is not None:
+        return EXIT_OK if all(statuses.get(field) in ("measured", "not_applicable")
+                              for field in result["required_measurements"]) else EXIT_UNMEASURED
+    if statuses and any(v not in ("measured", "not_applicable") for v in statuses.values()):
+        return EXIT_UNMEASURED
     return _exit_code_for_warnings(result["warnings"])
 
 

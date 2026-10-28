@@ -38,7 +38,7 @@
 
 ### Warning 의미
 
-- `empirical_preflight`는 4-tuple `(judge_quality, endpoint, performance, warnings)` 반환. 이전 버전은 3-tuple; warnings 리스트가 load-bearing 추가물.
+- `empirical_preflight`는 4-tuple `(judge_quality, endpoint, performance, warnings)` 반환. 이전 버전은 3-tuple; 0.8.0에서는 measurement_status가 우선이고 경고 문자열은 구형 결과의 호환 추론 경로입니다.
 - 측정되지 않은 필드마다 fail-closed default로 떨어졌음을 명시하는 warning이 append됨. 호출자는 숫자 값을 "좋음"으로 다루기 전에 반드시 warning을 surface하거나 집계해야 함.
 - 테스트(`tests/test_fail_closed_defaults.py`)가 기본값과 warning 텍스트를 모두 pin.
 
@@ -78,3 +78,5 @@ Noise floor는 호출자가 제공한 `fitness_samples`로부터 계산됩니다
 ## 0.8.0 범위 정정
 
 상태·검증·호환성의 최신 계약은 [upgrade-0.8.0.md](upgrade-0.8.0.md)에 있습니다. 실패 요청 시간은 성공 latency projection에서 제외하되 accounting 전체 비용에는 포함합니다. 공유 관측의 표본 수는 독립 표본 수로 합산하지 않습니다. 단일 항목 CV와 aggregate fitness 표준편차는 A/B 유의성 검정이 아닙니다.
+
+구조적 `measurement_status`가 CI 판단의 우선 계약입니다. 경고는 사람용 진단으로 보존하며, 구형 결과의 문자열 추론은 측정 완료의 증거가 아닙니다. schema fallback 권고는 advisory이며 자동 실행되지 않습니다. tokenizer 경로도 제공한 텍스트 구성 요소의 token 수에 대한 projection이며 실제 request framing 비용을 모두 계측한 값은 아닙니다.

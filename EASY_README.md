@@ -58,7 +58,7 @@ judge_quality, endpoint, performance, warnings = empirical_preflight(
 print(judge_noise_floor(judge_quality))   # e.g. 0.07
 ```
 
-`judge_noise_floor` is `1 - consistency`. `0.0` = the judge never disagreed with itself. Bigger = you need a bigger A/B delta before a win is believable. Cost: ~5 cheap API calls.
+`judge_noise_floor` is clipped relative CV (`1 - consistency`), not an absolute A/B effect threshold. Default shared judge/gate measurement uses 5 actual observations; configured extra probes and provider pricing determine total cost.
 
 ## It also checks (same pass)
 
@@ -69,7 +69,7 @@ print(judge_noise_floor(judge_quality))   # e.g. 0.07
 | **Context budget margin** | How close your biggest call is to the context limit. Negative = overflow. |
 | **Wall-time projection** | How long a full run will take, before you start it. |
 
-Any check it *couldn't* run **fails closed** (returns a safe-looking `0.0` but warns you). The `warnings` list tells "measured zero" apart from "never measured" — read it in CI.
+Unmeasured numeric fields use fail-closed defaults. Read `warnings.measurement_status` first and preserve `probe_accounting`; warning-string inference is a legacy fallback, not proof of historical measurement coverage.
 
 ## Works with omegaprompt — or alone
 

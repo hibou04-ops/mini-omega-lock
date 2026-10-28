@@ -73,16 +73,17 @@ judge_quality, endpoint, performance, warnings = empirical_preflight(
 )
 
 print("judge noise floor:", judge_noise_floor(judge_quality))
-for w in warnings:                 # fail-closed warnings are load-bearing
+print("measurement_status:", warnings.measurement_status)
+for w in warnings:                 # retain human-readable diagnostics
     print("[mini-omega-lock]", w)
 ```
 
-That's ~5 cheap API calls (cost depends on provider pricing and token usage). `judge_noise_floor` is `1 - consistency`: `0.0` = the judge never disagreed with itself; the bigger the number, the larger the A/B delta you need before a "win" is believable.
+`judge_noise_floor` is clipped relative CV (`1 - consistency`). It describes repeated scores of one fixed case; it does not define the absolute A/B delta needed for significance. The default judge/gate batch uses 5 actual observations; additional configured probes add calls. Cost depends on provider pricing and usage.
 
 ## Works with omegaprompt — and standalone
 
 - **Standalone:** the noise-floor probe is useful on its own. Run `preflight` against any LLM-judge / prompt-calibration setup, get the floor + schema-reliability numbers, gate your CI on them. No omegaprompt pipeline required to read the value.
-- **In the ecosystem:** `empirical_preflight` emits `omegaprompt.preflight.PreflightReport` records (`JudgeQualityMeasurement` / `EndpointMeasurement` / `PerformanceMeasurement`). Feed them to omegaprompt's `derive_adaptation_plan` and the calibration engine adapts its thresholds to what your infrastructure can actually deliver. mini-omega-lock is the empirical probe layer; omegaprompt is the engine it feeds.
+- **In the ecosystem:** `empirical_preflight` emits `omegaprompt.preflight.PreflightReport` records (`JudgeQualityMeasurement` / `EndpointMeasurement` / `PerformanceMeasurement`). Assemble them into a `PreflightReport` and call `derive_adaptation_plan`. The plan distinguishes recommendations from runtime consumption; some policy fields, including schema fallback, remain advisory. Read the artifact consumption record before claiming a policy was applied. mini-omega-lock is the empirical probe layer; omegaprompt is the engine it feeds.
 
 It depends on `omegaprompt` (`>=1.1.0`) to build those records, so `pip install mini-omega-lock` pulls omegaprompt in.
 
@@ -102,11 +103,11 @@ It depends on `omegaprompt` (`>=1.1.0`) to build those records, so `pip install 
 |---|---|---|
 | **Judge noise floor** | `judge_noise_floor`, `measure_judge_consistency` | Clipped CV (`1 - consistency`) over repeated scores of one fixed pair. Relative variability only; not an A/B significance test. |
 | Hard-gate flip rate | `measure_gate_flip_rate` | How often a pass/fail gate flips on the *same* input — a flipping gate randomises the ship verdict even when the score looks stable. |
-| Endpoint schema reliability | `probe_strict_schema` | STRICT_SCHEMA parse-success fraction. `< 0.9` → omegaprompt falls back to `JSON_OBJECT`. Also flags *silent* degradation (200-shaped but unparseable). |
-| Context budget margin | `compute_context_margin` (chars) / `compute_context_margin_from_texts` (tokenizer-exact) | `1 - (longest_call_tokens / context_window)`. Negative = guaranteed overflow. |
+| Endpoint schema reliability | `probe_strict_schema` | STRICT_SCHEMA parse-success fraction and silent parse degradation. A suggested `JSON_OBJECT` fallback is advisory; runtime does not automatically apply it. Inspect policy consumption in the artifact. |
+| Context budget margin | `compute_context_margin` (chars) / `compute_context_margin_from_texts` (tokenizer-exact) | `1 - (longest_call_tokens / context_window)`. Negative = projected overflow for the supplied components; request framing can add overhead. |
 | Performance projection | `project_performance` | Probe latency × calibration scale → wall-time estimate before launching. |
 
-One call — `empirical_preflight()` — runs them in one pass and returns `(judge_quality, endpoint, performance, warnings)`. **Any unmeasured field fails closed** (e.g. `schema_reliability=0.0`, not `1.0`) and is named in `warnings`, so an agent can always tell "measured zero" from "we never ran that probe". Treat the warnings list as load-bearing in CI, not cosmetic.
+One `empirical_preflight()` call returns `(judge_quality, endpoint, performance, warnings)`. Fail-closed numeric defaults remain compatible. Use `warnings.measurement_status` as the primary measurement-state contract and persist `probe_accounting` too. Human warnings remain diagnostics; substring inference is only a legacy fallback when structured states are absent, and does not verify historical measurement coverage.
 
 ## CLI: machine summary, scorecard, threshold gates
 

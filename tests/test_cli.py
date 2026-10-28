@@ -41,7 +41,7 @@ _ITEM = json.dumps({"id": "probe-1", "input": "What is 2+2?", "reference": "4"})
 # ---------------------------------------------------------------------------
 
 
-def _run_cli_inprocess(argv, monkeypatch):
+def _run_cli_inprocess(argv, monkeypatch, scores=None):
     """Patch make_provider to a scripted offline provider, run cli.main,
     capture stdout, return (stdout, exit_code)."""
     import io
@@ -59,9 +59,14 @@ def _run_cli_inprocess(argv, monkeypatch):
         name = "anthropic"
         model = "scripted"
 
+        def __init__(self):
+            self.cursor = 0
+
         def call(self, request):  # noqa: ANN001
+            score = (scores or [4])[self.cursor % len(scores or [4])]
+            self.cursor += 1
             return ProviderResponse(
-                parsed=JudgeResult(scores={"accuracy": 4}, gate_results={"no_refusal": True}),
+                parsed=JudgeResult(scores={"accuracy": score}, gate_results={"no_refusal": True}),
                 usage={"input_tokens": 50, "output_tokens": 10},
                 latency_ms=5.0,
             )
@@ -104,6 +109,11 @@ def test_cli_json_output_shape(monkeypatch):
         # too, so a consumer can read judge_noise_floor without re-deriving
         # it from judge_quality.consistency.
         "summary",
+        "measurement_status",
+        "probe_accounting",
+        "required_measurements",
+        "quality_thresholds_configured",
+        "quality_assessment",
     }
     assert isinstance(obj["warnings"], list)
     assert obj["summary"]["schema_version"].startswith("mini-omega-lock/summary/")
@@ -117,7 +127,7 @@ def test_cli_jsonl_output_shape(monkeypatch):
     assert len(lines) == 2
     report = json.loads(lines[0])
     plan = json.loads(lines[1])
-    assert set(report) == {"judge_quality", "endpoint", "performance", "warnings"}
+    assert set(report) == {"judge_quality", "endpoint", "performance", "warnings", "measurement_status", "probe_accounting", "required_measurements", "quality_thresholds_configured", "quality_assessment"}
     assert set(plan) == {"adaptation_plan"}
     assert code == 2
 
@@ -181,13 +191,13 @@ def test_cli_scorecard_out_writes_file(monkeypatch, tmp_path):
     assert code == 2
 
 
-def test_cli_fail_under_schema_reliability_breach_exit_3(monkeypatch):
-    # Schema probe not supplied -> schema_reliability=0.0 < 0.9 -> exit 3.
+def test_cli_unmeasured_schema_is_not_a_measured_threshold_failure(monkeypatch):
+    # An absent schema probe is an incomplete measurement, not measured bad quality.
     _, code = _run_cli_inprocess(
         _BASE_ARGS + ["--summary", "--fail-under-schema-reliability", "0.9"],
         monkeypatch,
     )
-    assert code == 3
+    assert code == 2
 
 
 def test_cli_fail_over_noise_floor_pass_falls_to_unmeasured(monkeypatch):
@@ -200,13 +210,41 @@ def test_cli_fail_over_noise_floor_pass_falls_to_unmeasured(monkeypatch):
     assert code == 2
 
 
-def test_cli_threshold_breach_precedes_unmeasured(monkeypatch):
-    # nf=0.0 > -0.1 -> breach -> exit 3 even though unmeasured fields exist.
+def test_cli_invalid_threshold_is_input_error(monkeypatch):
+    # Reject invalid thresholds before any provider work.
     _, code = _run_cli_inprocess(
         _BASE_ARGS + ["--summary", "--fail-over-noise-floor", "-0.1"],
         monkeypatch,
     )
+    assert code == 1
+
+
+def test_cli_selected_measurement_complete_is_not_quality_approval(monkeypatch):
+    out,code=_run_cli_inprocess(_BASE_ARGS+["--consistency-repeats","3","--require-measurements","judge_consistency,gate_flip_rate","--summary"],monkeypatch)
+    summary=json.loads(out)
+    assert code == 0
+    assert summary["all_fields_measured"] is False
+    assert summary["quality_assessment"] == "not_requested"
+    assert summary["quality_thresholds_configured"] is False
+
+
+def test_cli_threshold_field_cannot_be_omitted_from_required_measurements(monkeypatch):
+    out,code=_run_cli_inprocess(_BASE_ARGS+["--consistency-repeats","3","--require-measurements","judge_consistency","--fail-under-schema-reliability","0.9","--summary"],monkeypatch)
+    summary=json.loads(out)
+    assert code == 2
+    assert "schema_reliability" in summary["required_measurements"]
+    assert summary["quality_assessment"] == "unmeasured"
+
+
+def test_cli_measured_quality_threshold_failure_is_distinct_exit_three(monkeypatch):
+    out,code=_run_cli_inprocess(_BASE_ARGS+["--consistency-repeats","3","--require-measurements","judge_consistency","--fail-over-noise-floor","0.2","--summary"],monkeypatch,scores=[1,5,3])
     assert code == 3
+    assert json.loads(out)["quality_assessment"] == "fail"
+
+
+def test_cli_measurement_name_typo_rejected_before_call(monkeypatch):
+    out,code=_run_cli_inprocess(_BASE_ARGS+["--require-measurements","judge_consistncy","--summary"],monkeypatch)
+    assert code == 1 and out == ""
 
 
 def test_exit_code_threshold_constant_distinct():

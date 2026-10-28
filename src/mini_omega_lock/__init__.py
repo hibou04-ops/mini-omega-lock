@@ -56,7 +56,7 @@ from mini_omega_lock.summary import (
     render_scorecard,
 )
 
-__version__ = "0.7.1"
+__version__ = "0.8.0"
 
 __all__ = [
     "build_summary",

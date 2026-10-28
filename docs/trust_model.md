@@ -38,7 +38,7 @@ This document spells out what `mini-omega-lock` will and will not vouch for, so 
 
 ### Warning semantics
 
-- `empirical_preflight` returns a 4-tuple `(judge_quality, endpoint, performance, warnings)`. Earlier versions returned a 3-tuple; the warnings list is the load-bearing addition.
+- `empirical_preflight` returns a 4-tuple `(judge_quality, endpoint, performance, warnings)`. Earlier versions returned a 3-tuple; structured measurement_status is primary in 0.8.0; warning parsing is a legacy fallback.
 - Each unmeasured field appends a warning naming the field that fell back to a fail-closed default. Callers MUST surface or aggregate these warnings before treating the numeric values as "good".
 - Tests (`tests/test_fail_closed_defaults.py`) pin both the default values and the warning text.
 
@@ -74,3 +74,9 @@ The noise floor is computed from caller-supplied `fitness_samples`. The `empiric
 ## How to challenge this document
 
 If you find a claim above that the source code or tests do not back up, that is a release-blocker bug. File it via `.github/ISSUE_TEMPLATE/claim_drift.md` with the offending line and the source-of-truth location that contradicts it.
+
+## 0.8.0 범위 정정
+
+상태·검증·호환성의 최신 계약은 [upgrade-0.8.0.md](upgrade-0.8.0.md)에 있습니다. 실패 요청 시간은 성공 latency projection에서 제외하되 accounting 전체 비용에는 포함합니다. 공유 관측의 표본 수는 독립 표본 수로 합산하지 않습니다. 단일 항목 CV와 aggregate fitness 표준편차는 A/B 유의성 검정이 아닙니다.
+
+구조적 `measurement_status`가 CI 판단의 우선 계약입니다. 경고는 사람용 진단으로 보존하며, 구형 결과의 문자열 추론은 측정 완료의 증거가 아닙니다. schema fallback 권고는 advisory이며 자동 실행되지 않습니다. tokenizer 경로도 제공한 텍스트 구성 요소의 token 수에 대한 projection이며 실제 request framing 비용을 모두 계측한 값은 아닙니다.

@@ -333,6 +333,7 @@ def empirical_preflight(
         monotonic_examples=monotonic_pairs,
         gate_flip_repeats=gate_flip_repeats,
     )
+    from mini_omega_lock.summary import build_summary
     return {
         "judge_quality": judge_q.model_dump(mode="json"),
         "endpoint": endpoint.model_dump(mode="json"),
@@ -340,7 +341,12 @@ def empirical_preflight(
         # Surface fail-closed warnings: agents must read this to know
         # whether schema_reliability=0.0 means "measured zero" or
         # "not measured (defaulted to 0)".
-        "warnings": warnings,
+        "warnings": list(warnings),
+        "measurement_status": dict(getattr(warnings, "measurement_status", {})),
+        "probe_accounting": dict(getattr(warnings, "probe_accounting", {})),
+        "summary": build_summary(judge_q, endpoint, perf, warnings),
+        "quality_assessment": "not_requested",
+        "quality_thresholds_configured": False,
     }
 
 
@@ -476,10 +482,11 @@ def compute_context_margin(
 
 @mcp_app.tool()
 def noise_floor_estimate(fitness_samples: Sequence[float]) -> dict:
-    """Estimate fitness variance from repeated evaluations at fixed params.
+    """Describe absolute fitness standard deviation at fixed params.
 
-    Use the resulting noise floor as a minimum-detectable-effect threshold:
-    differences smaller than the noise floor are not statistically meaningful.
+    This is a descriptive population standard deviation in fitness units.
+    It is not a minimum detectable effect or an A/B significance test;
+    a comparison needs paired observations, uncertainty, and a decision rule.
 
     Args:
         fitness_samples: List of fitness values from repeated evaluations
@@ -488,7 +495,12 @@ def noise_floor_estimate(fitness_samples: Sequence[float]) -> dict:
     Returns:
         Dict with ``noise_floor`` (non-negative float).
     """
-    return {"noise_floor": _noise_floor_estimate(fitness_samples=list(fitness_samples))}
+    return {
+        "noise_floor": _noise_floor_estimate(fitness_samples=list(fitness_samples)),
+        "samples": len(fitness_samples),
+        "measurement_status": "measured" if len(fitness_samples) >= 2 else "insufficient_samples",
+        "quality_assessment": "not_requested",
+    }
 
 
 @mcp_app.tool()
@@ -669,6 +681,9 @@ def derive_adaptation_plan(
     judge_quality: dict | None = None,
     endpoint: dict | None = None,
     performance: dict | None = None,
+    measurement_status: dict[str, str] | None = None,
+    probe_accounting: dict | None = None,
+    warnings: list[str] | None = None,
 ) -> dict:
     """Convert preflight measurements into a concrete omegaprompt AdaptationPlan.
 
@@ -692,10 +707,16 @@ def derive_adaptation_plan(
         PerformanceMeasurement,
     )
 
+    extra = {k: v for k, v in {
+        "measurement_status": measurement_status or {},
+        "probe_accounting": probe_accounting or {},
+    }.items() if k in PreflightReport.model_fields}
     report = PreflightReport(
         judge_quality=JudgeQualityMeasurement.model_validate(judge_quality) if judge_quality else None,
         endpoint=EndpointMeasurement.model_validate(endpoint) if endpoint else None,
         performance=PerformanceMeasurement.model_validate(performance) if performance else None,
+        warnings=list(warnings or []),
+        **extra,
     )
     plan = _dap(report=report)
     return plan.model_dump(mode="json")

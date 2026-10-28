@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.0 - 2026-10-28
+
+실제 judge 관측을 consistency/gate flip에 공유하고 표본 provenance와 실패 비용을 기록합니다. 기존 4-tuple을 보존하며 측정 상태·accounting을 CLI/MCP/PreflightReport로 전달합니다. clipped CV를 A/B 유의성 판정처럼 설명하던 문구를 교정하고 미측정 threshold와 측정 실패를 구분합니다.
+
+검증 범위와 호환성: [upgrade 0.8.0](docs/upgrade-0.8.0.md). 유료 provider/model 품질 검증과 전체 실행시간 배속은 주장하지 않습니다.
+
 ## 0.7.1 - 2026-10-08
 
 Bound FastMCP to SDK >=1,<2. Add installed offline context projection and explicit warning-preserving PreflightReport handoff. Clarify measurement exit codes, separate packaging, and evidence limits; remove fixed live-cost promises.

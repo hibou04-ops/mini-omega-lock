@@ -15,7 +15,7 @@ pip install mini-omega-lock
 Python 3.11 이상에서 실행합니다. 설치에는 인터넷이 필요합니다.
 
 ```bash
-python -m pip install mini-omega-lock==0.8.0
+python -m pip install mini-omega-lock==0.8.1
 preflight --help
 python -c "from mini_omega_lock import compute_context_margin; print(compute_context_margin(system_prompt_chars=0, rubric_chars=0, longest_input_chars=380, longest_reference_chars=0, longest_response_chars=0, context_window_tokens=1000))"
 ```

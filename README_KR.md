@@ -1,6 +1,6 @@
 # mini-omega-lock (한국어)
 
-> **당신의 prompt-eval 개선폭이 judge 자신의 noise보다 작을 수 있습니다. mini-omega-lock은 A/B 결과를 믿기 전에 그 noise floor를 측정합니다.**
+> **judge 반복 관측의 변동과 미측정 항목을 확인합니다. A/B 유의성 판정에는 별도의 비교 설계가 필요합니다.**
 
 ```bash
 pip install mini-omega-lock

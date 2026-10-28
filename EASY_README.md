@@ -15,7 +15,7 @@ Probe judge consistency, schema behavior, context margin and run projections bef
 Requires Python 3.11+. Installation needs internet.
 
 ```bash
-python -m pip install mini-omega-lock==0.8.0
+python -m pip install mini-omega-lock==0.8.1
 preflight --help
 python -c "from mini_omega_lock import compute_context_margin; print(compute_context_margin(system_prompt_chars=0, rubric_chars=0, longest_input_chars=380, longest_reference_chars=0, longest_response_chars=0, context_window_tokens=1000))"
 ```
@@ -65,7 +65,7 @@ print(judge_noise_floor(judge_quality))   # e.g. 0.07
 | Check | What it tells you |
 |---|---|
 | **Judge noise floor** | The headline: how much the judge disagrees with itself. |
-| **Schema reliability** | Fraction of STRICT_SCHEMA calls that parse. `< 0.9` → fall back to JSON. Catches *silent* failures too. |
+| **Schema reliability** | Fraction of STRICT_SCHEMA calls that parse, including silent parse failures. JSON fallback is an advisory recommendation; runtime does not automatically apply it. |
 | **Context budget margin** | How close your biggest call is to the context limit. Negative = overflow. |
 | **Wall-time projection** | How long a full run will take, before you start it. |
 

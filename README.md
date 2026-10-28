@@ -1,6 +1,6 @@
 # mini-omega-lock
 
-> **Your prompt-eval improvement might be smaller than your judge's own noise. mini-omega-lock measures that noise floor before you trust any A/B result.**
+> **Measure repeated judge variability and missing measurements before interpreting evaluation results. An A/B significance decision needs a separate comparison design.**
 
 ```bash
 pip install mini-omega-lock

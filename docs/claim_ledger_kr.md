@@ -57,3 +57,11 @@
 ## Claim 철회
 
 Deterministic artifact나 command로 뒷받침할 수 없는 claim은 ledger에 남겨두지 말고 **제거**하세요. README에서 발견된 ledger 없는 수치/feature claim은 `check_repo_consistency.py`에 탐지 룰이 추가되는 즉시 release-audit script가 release blocker로 처리합니다.
+
+## 0.8.0 검증된 추가 계약
+
+| 주장 | 근거 | 재현 | 상태 |
+|---|---|---|---|
+| 기본 consistency3/gate5의 관측 8→5회, 표본수 보존 | `benchmarks/upgrade-0.8.0/*.json` | `python benchmarks/observation_cost.py` | artifact-backed |
+| 구조적 측정 상태·실패 시간/호출 비용 전달 | `probes.py`, `summary.py`, CLI/MCP | `python -m pytest -q tests/test_observation_contracts.py tests/test_cli.py` | command-backed |
+| CV는 A/B 유의성 판정이 아니며 zero-mean은 명시적 관례 | `docs/upgrade-0.8.0.md` | `python -m pytest -q tests/test_observation_contracts.py` | source-backed |

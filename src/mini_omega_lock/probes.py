@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from statistics import mean, pstdev
+from math import isfinite
 from time import perf_counter
 from typing import Any
 
@@ -45,6 +46,62 @@ from omegaprompt.providers.base import (
     ProviderError,
     ProviderRequest,
 )
+
+
+class ProbeWarnings(list[str]):
+    """Backward-compatible warnings list carrying structured measurement evidence.
+
+    Serializing only the list retains the legacy warnings contract; use
+    measurement_status/probe_accounting explicitly in persisted reports.
+    """
+    def __init__(self):
+        super().__init__()
+        self.measurement_status: dict[str, str] = {}
+        self.probe_accounting: dict[str, Any] = {
+            "attempted_calls": 0, "successful_calls": 0, "failed_calls": 0,
+            "elapsed_ms": 0.0, "successful_usage": {},
+            "failed_call_usage_unknown": False,
+            "provider_internal_retries": None,
+            "observation_batches": {},
+        }
+
+
+def _observed_call(call, accounting: dict[str, Any]):
+    accounting["attempted_calls"] += 1
+    started = perf_counter()
+    try:
+        value = call()
+    except Exception:
+        accounting["failed_calls"] += 1
+        accounting["failed_call_usage_unknown"] = True
+        raise
+    else:
+        accounting["successful_calls"] += 1
+        usage = value[1] if isinstance(value, tuple) else getattr(value, "usage", {})
+        if hasattr(usage, "model_dump"):
+            usage = usage.model_dump()
+        for key, number in (usage or {}).items():
+            if type(number) in (int, float) and isfinite(number):
+                accounting["successful_usage"][key] = accounting["successful_usage"].get(key, 0) + number
+        return value
+    finally:
+        accounting["elapsed_ms"] += (perf_counter() - started) * 1000.0
+
+
+class _ObservedJudge:
+    def __init__(self, judge, accounting):
+        self.judge, self.accounting = judge, accounting
+
+    def score(self, **kwargs):
+        return _observed_call(lambda: self.judge.score(**kwargs), self.accounting)
+
+
+class _ObservedProvider:
+    def __init__(self, provider, accounting):
+        self.provider, self.accounting = provider, accounting
+
+    def call(self, request):
+        return _observed_call(lambda: self.provider.call(request), self.accounting)
 
 
 # ----- judge consistency -----
@@ -94,20 +151,15 @@ def measure_gate_flip_rate(
     if not judge_gates:
         return {}
 
-    histories: dict[str, list[bool]] = {gate: [] for gate in judge_gates}
-    for _ in range(max(2, repeats)):
-        result, _usage = judge.score(
-            rubric=rubric, item=probe_item, target_response=target_response
-        )
-        for gate in judge_gates:
-            value = result.gate_results.get(gate)
-            if value is None:
-                # Treat absence as False — a missing gate is a structural
-                # judge failure, not a passing gate. (LLMJudge from PR1
-                # raises on this earlier; here we belt-and-brace in case
-                # a future judge implementation skips the check.)
-                value = False
-            histories[gate].append(bool(value))
+    results = [next(iter(judge.score(rubric=rubric, item=probe_item, target_response=target_response)))
+               for _ in range(max(2, repeats))]
+    return _gate_flip_from_results(results, rubric)
+
+
+def _gate_flip_from_results(results: Sequence[JudgeResult], rubric: JudgeRubric):
+    judge_gates = [g.name for g in rubric.hard_gates if g.evaluator == "judge"]
+    histories = {gate: [bool(r.gate_results.get(gate, False)) for r in results]
+                 for gate in judge_gates}
 
     out: dict[str, dict[str, float | int | bool]] = {}
     for gate, history in histories.items():
@@ -140,17 +192,22 @@ def measure_judge_consistency(
     1.0 means the judge returned the identical weighted score every
     call; 0.0 means the standard deviation matched the mean.
     """
-    scores: list[float] = []
-    results: list[JudgeResult] = []
-    for _ in range(repeats):
-        result, _usage = judge.score(rubric=rubric, item=probe_item, target_response=target_response)
-        results.append(result)
-        scores.append(_score_for(result, rubric))
+    if type(repeats) is not int or repeats < 1:
+        raise ValueError("repeats must be a positive integer")
+    results = [next(iter(judge.score(rubric=rubric, item=probe_item, target_response=target_response)))
+               for _ in range(repeats)]
+    return _consistency_from_results(results, rubric), results
+
+
+def _consistency_from_results(results: Sequence[JudgeResult], rubric: JudgeRubric):
+    scores = [_score_for(result, rubric) for result in results]
+    if any(not isfinite(score) for score in scores):
+        raise ValueError("judge scores must be finite")
 
     if not scores or mean(scores) == 0:
         consistency = 1.0 if len(set(scores)) == 1 else 0.0
     else:
-        cv = pstdev(scores) / mean(scores)
+        cv = pstdev(scores) / abs(mean(scores))
         consistency = max(0.0, min(1.0, 1.0 - cv))
 
     # Anchoring: fraction of the rubric's full range the judge used
@@ -179,9 +236,8 @@ def measure_judge_consistency(
             # ordered fixture (or pass ``monotonic_examples=`` to
             # ``empirical_preflight``) to actually measure this.
             scale_monotonic=False,
-            samples=repeats,
-        ),
-        results,
+            samples=len(results),
+        )
     )
 
 
@@ -434,6 +490,8 @@ def noise_floor_estimate(
     target + judge combination is nominally deterministic at fixed
     inputs.
     """
+    if any(not isfinite(x) for x in fitness_samples):
+        raise ValueError("fitness_samples must contain only finite numbers")
     if len(fitness_samples) < 2:
         return 0.0
     return pstdev(fitness_samples)
@@ -493,88 +551,71 @@ def empirical_preflight(
             the context-margin probe uses a real token count instead
             of the ``chars_per_token`` heuristic.
     """
-    warnings: list[str] = []
-
-    # Reviewer item #6: consistency probe and latency probe are the
-    # same physical calls; reuse the elapsed time. Wrapped in try/except
-    # so a probe failure doesn't (a) crash empirical_preflight at the
-    # first measurement, and (b) doesn't poison the latency mean with
-    # failed-call wall time. On failure we record a warning and fall
-    # back to fail-closed JudgeQualityMeasurement defaults.
-    consistency_t0 = perf_counter()
-    try:
-        judge_quality, _ = measure_judge_consistency(
-            judge=judge,
-            rubric=rubric,
-            probe_item=probe_item,
-            target_response=probe_response,
-            repeats=consistency_repeats,
-        )
-        consistency_succeeded = True
-    except Exception as exc:
-        warnings.append(
-            f"judge_quality.consistency probe failed: "
-            f"{type(exc).__name__}: {exc}; defaulted to fail-closed "
-            f"JudgeQualityMeasurement (consistency=0.0). The failed "
-            f"probe latency is NOT included in the performance "
-            f"projection — only successful probe latency is used."
-        )
-        judge_quality = JudgeQualityMeasurement(
-            consistency=0.0,
-            anchoring_usage=0.0,
-            scale_monotonic=False,
-            samples=0,
-        )
-        consistency_succeeded = False
-    consistency_elapsed_ms = (perf_counter() - consistency_t0) * 1000.0
-    # Only count probe wall time as a latency sample when the probe
-    # actually succeeded. A 30s timeout from a failed call must not
-    # flow into mean_call_latency_ms as if it were a successful sample.
-    avg_call_latency_ms = (
-        consistency_elapsed_ms / max(1, consistency_repeats)
-        if consistency_succeeded and consistency_repeats > 0 else 0.0
-    )
-
-    # Hard-gate flip rate — surface a stability number that weighted
-    # consistency cannot see. A judge whose score is stable but whose
-    # gate flips True/False randomises the ship verdict. Measured here
-    # only if the rubric declares judge-mode gates.
+    if type(consistency_repeats) is not int or consistency_repeats < 1:
+        raise ValueError("consistency_repeats must be a positive integer")
+    if type(gate_flip_repeats) is not int or gate_flip_repeats < 0:
+        raise ValueError("gate_flip_repeats must be a non-negative integer")
+    preflight_started = perf_counter()
+    warnings = ProbeWarnings()
+    states = warnings.measurement_status
+    accounting = warnings.probe_accounting
+    judge = _ObservedJudge(judge, accounting)
+    if strict_schema_provider is not None:
+        strict_schema_provider = _ObservedProvider(strict_schema_provider, accounting)
     judge_gates = [g for g in rubric.hard_gates if g.evaluator == "judge"]
-    if judge_gates and gate_flip_repeats > 0:
+    gate_count = max(2, gate_flip_repeats) if judge_gates and gate_flip_repeats > 0 else 0
+    count = max(consistency_repeats, gate_count)
+    results: list[JudgeResult] = []
+    consistency_t0 = perf_counter()
+    batch_error = None
+    for _ in range(count):
         try:
-            flip_results = measure_gate_flip_rate(
-                judge=judge,
-                rubric=rubric,
-                probe_item=probe_item,
-                target_response=probe_response,
-                repeats=gate_flip_repeats,
-            )
-            max_flip = max(
-                (float(r["flip_rate"]) for r in flip_results.values()),
-                default=0.0,
-            )
-            if max_flip > 0.0:
-                worst = max(
-                    flip_results.items(),
-                    key=lambda kv: float(kv[1]["flip_rate"]),
-                )
-                warnings.append(
-                    f"judge gate '{worst[0]}' flipped on "
-                    f"{float(worst[1]['flip_rate']):.2f} of consecutive call pairs "
-                    f"(over {int(worst[1]['samples'])} repeats); ship verdict will "
-                    f"be unstable. Re-spec the gate or raise rescore_count."
-                )
+            result, _ = judge.score(rubric=rubric, item=probe_item, target_response=probe_response)
+            if not isfinite(_score_for(result, rubric)):
+                raise ValueError("judge score must be finite")
+            results.append(result)
         except Exception as exc:
-            warnings.append(
-                f"judge_quality.gate_flip_rate probe failed: "
-                f"{type(exc).__name__}: {exc}"
-            )
-    elif not judge_gates:
-        # No judge-mode gates -> nothing to measure; not a warning.
-        pass
+            batch_error = exc
+            break
+    consistency_elapsed_ms = (perf_counter() - consistency_t0) * 1000.0
+    accounting["observation_batches"]["shared_judge"] = {
+        "requested": count, "observed": len(results),
+        "consistency_samples": min(len(results), consistency_repeats),
+        "gate_samples": min(len(results), gate_count),
+        "shared_prefix": min(len(results), consistency_repeats, gate_count),
+    }
+    consistency_succeeded = len(results) >= consistency_repeats
+    if consistency_succeeded:
+        judge_quality = _consistency_from_results(results[:consistency_repeats], rubric)
+        states["judge_consistency"] = "measured" if consistency_repeats >= 2 else "insufficient_samples"
+        states["anchoring_usage"] = states["judge_consistency"]
+        if consistency_repeats >= 2 and mean(_score_for(r, rubric) for r in results[:consistency_repeats]) == 0:
+            states["judge_consistency"] = "estimated"
+            warnings.append("judge_quality.consistency uses the zero-mean compatibility convention; CV is undefined, so relative variability was not measured.")
+    else:
+        judge_quality = JudgeQualityMeasurement(consistency=0.0, anchoring_usage=0.0, scale_monotonic=False, samples=0)
+        states["judge_consistency"] = states["anchoring_usage"] = "failed"
+        warnings.append(f"judge_quality.consistency probe failed: {type(batch_error).__name__}: {batch_error}; defaulted to fail-closed JudgeQualityMeasurement (consistency=0.0). Failed-call time remains in probe_accounting.elapsed_ms, not the successful latency projection.")
+    if consistency_repeats < 2:
+        warnings.append("judge_quality.consistency insufficient samples — at least 2 actual observations are required to estimate variability.")
+    avg_call_latency_ms = consistency_elapsed_ms / count if len(results) == count else 0.0
+    states["mean_call_latency_ms"] = "measured" if len(results) == count else "failed"
+    states["gate_flip_rate"] = "not_applicable" if not judge_gates else "unmeasured"
+    if gate_count:
+        if len(results) >= gate_count:
+            flip_results = _gate_flip_from_results(results[:gate_count], rubric)
+            states["gate_flip_rate"] = "measured"
+            accounting["gate_flip_rates"] = flip_results
+            worst = max(flip_results.items(), key=lambda kv: float(kv[1]["flip_rate"]))
+            if float(worst[1]["flip_rate"]) > 0:
+                warnings.append(f"judge gate '{worst[0]}' flipped on {float(worst[1]['flip_rate']):.2f} of consecutive call pairs (over {int(worst[1]['samples'])} repeats); ship verdict will be unstable. Re-spec the gate or raise rescore_count.")
+        else:
+            states["gate_flip_rate"] = "failed"
+            warnings.append(f"judge_quality.gate_flip_rate probe failed: {type(batch_error).__name__}: {batch_error}")
 
     # Scale monotonicity — single-item consistency cannot measure this.
     # If the caller passed an ordered fixture, run it; otherwise warn.
+    states["scale_monotonic"] = "unmeasured"
     if monotonic_examples is not None and len(monotonic_examples) >= 2:
         try:
             mono = measure_scale_monotonicity(
@@ -582,6 +623,7 @@ def empirical_preflight(
                 rubric=rubric,
                 ordered_examples=monotonic_examples,
             )
+            states["scale_monotonic"] = "measured"
             judge_quality = judge_quality.model_copy(update={"scale_monotonic": mono})
             if not mono:
                 warnings.append(
@@ -589,6 +631,7 @@ def empirical_preflight(
                     "disagrees with the supplied bad < good ordering."
                 )
         except Exception as exc:  # pragma: no cover - defensive
+            states["scale_monotonic"] = "failed"
             warnings.append(
                 f"judge_quality.scale_monotonic probe failed: "
                 f"{type(exc).__name__}: {exc}; defaulted to False."
@@ -606,6 +649,7 @@ def empirical_preflight(
         and strict_schema_output is not None
         and strict_schema_probes
     )
+    states["schema_reliability"] = states["silent_degradation_detected"] = "measured" if schema_probe_run else "unmeasured"
     if schema_probe_run:
         endpoint = probe_strict_schema(
             provider=strict_schema_provider,
@@ -644,6 +688,7 @@ def empirical_preflight(
         )
 
     # Context budget - computed from the probe content sizes.
+    states["context_budget_margin"] = "measured" if token_counter is not None and system_prompts and context_window_tokens > 0 else "estimated"
     if token_counter is not None:
         # Tokenizer-exact path. Build text populations from what we have
         # in scope; system_prompts is provided when the caller knows the
@@ -695,7 +740,7 @@ def empirical_preflight(
         dataset_size=dataset_size_hint,
         candidates_expected=candidates_expected,
     )
-    if not consistency_succeeded:
+    if avg_call_latency_ms <= 0:
         warnings.append(
             "performance.mean_call_latency_ms not measured — the "
             "consistency probe failed. Treat the projected wall time "
@@ -703,6 +748,9 @@ def empirical_preflight(
         )
 
     # Noise floor - measure it from fitness_samples when caller provides them.
+    states["fitness_noise_floor"] = "measured" if fitness_samples is not None and len(fitness_samples) >= 2 else ("insufficient_samples" if fitness_samples is not None else "unmeasured")
+    if fitness_samples is not None:
+        noise_floor_estimate(fitness_samples=fitness_samples)
     if fitness_samples is not None and len(fitness_samples) >= 2:
         nf = noise_floor_estimate(fitness_samples=list(fitness_samples))
         performance = performance.model_copy(update={"noise_floor": nf})
@@ -714,6 +762,7 @@ def empirical_preflight(
             "needs this signal to widen safely."
         )
 
+    accounting["total_elapsed_ms"] = (perf_counter() - preflight_started) * 1000.0
     return judge_quality, endpoint, performance, warnings
 
 

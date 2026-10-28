@@ -1,6 +1,6 @@
 # mini-omega-lock (한국어)
 
-> **당신의 prompt-eval 개선폭이 judge 자신의 noise보다 작을 수 있습니다. mini-omega-lock은 A/B 결과를 믿기 전에 그 noise floor를 측정합니다.**
+> **judge 반복 관측의 변동과 미측정 항목을 확인합니다. A/B 유의성 판정에는 별도의 비교 설계가 필요합니다.**
 
 ```bash
 pip install mini-omega-lock
@@ -23,7 +23,7 @@ pip install mini-omega-lock
 Python 3.11 이상에서 실행합니다. 설치에는 인터넷이 필요합니다.
 
 ```bash
-python -m pip install mini-omega-lock==0.7.1
+python -m pip install mini-omega-lock==0.8.0
 preflight --help
 python -c "from mini_omega_lock import compute_context_margin; print(compute_context_margin(system_prompt_chars=0, rubric_chars=0, longest_input_chars=380, longest_reference_chars=0, longest_response_chars=0, context_window_tokens=1000))"
 ```
@@ -41,9 +41,9 @@ LLM judge는 *같은* 응답에 *같은* 점수를 매번 주지 않습니다. �
 
 이게 중요한 이유는 규칙 하나 때문입니다:
 
-> **judge 자신의 noise보다 작은 최적화 delta는 진짜가 아니다.**
+> **단일 항목의 반복 변동만으로 A/B 개선의 유의성을 판정할 수 없습니다.**
 
-프롬프트 B가 A보다 0.4% 좋게 나왔는데, judge가 *동일한* 답을 재채점할 때 1.2%씩 흔들린다면, 그 "승리"는 noise 안에 있습니다. B를 배포하겠지만 실제로 반복 측정과 독립 검증이 필요합니다입니다. mini-omega-lock은 저렴한 probe call 몇 번으로 A/B delta를 믿기 *전에* 그 floor 수치를 알려줍니다.
+반복 점수의 CV는 상대 변동이고 aggregate fitness의 표준편차는 절대 단위입니다. A/B 판단에는 표본의 대응 관계, 불확실성, 사전 판정 기준이 별도로 필요합니다.
 
 ```bash
 # 한 숫자, Python 불필요, CI 친화적 exit code:
@@ -73,16 +73,17 @@ judge_quality, endpoint, performance, warnings = empirical_preflight(
 )
 
 print("judge noise floor:", judge_noise_floor(judge_quality))
-for w in warnings:                 # fail-closed warnings는 load-bearing
+print("measurement_status:", warnings.measurement_status)
+for w in warnings:                 # 사람이 읽는 진단도 보존
     print("[mini-omega-lock]", w)
 ```
 
-저렴한 API 호출 ~5번 (frontier tier에서 $0.01 미만). `judge_noise_floor`는 `1 - consistency`입니다: `0.0`이면 judge가 자기 자신과 한 번도 어긋나지 않은 것이고, 숫자가 클수록 "승리"를 믿으려면 더 큰 A/B delta가 필요합니다.
+`judge_noise_floor`는 clipped 상대 CV (`1 - consistency`)이며 한 사례의 반복 점수 변동입니다. 절대 A/B delta의 유의성 기준이 아닙니다. 기본 judge/gate 배치는 실제 관측 5개를 사용하며 추가 probe를 설정하면 호출이 늘어납니다. 비용은 provider와 사용량에 따라 달라집니다.
 
 ## omegaprompt와 함께 — 그리고 단독으로
 
 - **단독:** noise-floor probe는 그 자체로 유용합니다. 어떤 LLM-judge / prompt-calibration 셋업에든 `preflight`를 돌려 floor + schema-reliability 수치를 얻고, CI를 거기에 gate하세요. 값을 읽는 데 omegaprompt 파이프라인이 필요 없습니다.
-- **생태계 안에서:** `empirical_preflight`는 `omegaprompt.preflight.PreflightReport` 레코드(`JudgeQualityMeasurement` / `EndpointMeasurement` / `PerformanceMeasurement`)를 emit합니다. omegaprompt의 `derive_adaptation_plan`에 넘기면 calibration 엔진이 당신 인프라가 실제로 뽑을 수 있는 수치에 맞춰 threshold를 조정합니다. mini-omega-lock은 empirical probe 레이어, omegaprompt는 그것이 먹이는 엔진입니다.
+- **생태계 안에서:** `empirical_preflight`는 `omegaprompt.preflight.PreflightReport` 레코드(`JudgeQualityMeasurement` / `EndpointMeasurement` / `PerformanceMeasurement`)를 emit합니다. `PreflightReport`로 조립하고 `derive_adaptation_plan`에 넘기면 실행 정책과 권고를 받습니다. schema fallback을 포함한 일부 필드는 advisory이므로 artifact의 정책 소비 기록을 확인해야 실제 적용 여부를 알 수 있습니다. mini-omega-lock은 empirical probe 레이어, omegaprompt는 그것이 먹이는 엔진입니다.
 
 레코드 생성을 위해 `omegaprompt`(`>=1.1.0`)에 의존하므로 `pip install mini-omega-lock`이 omegaprompt를 함께 끌어옵니다.
 
@@ -91,7 +92,7 @@ for w in warnings:                 # fail-closed warnings는 load-bearing
 | | A/B delta를 믿음 | mini-omega-lock |
 |---|---|---|
 | judge 자기 불일치를 알려줌 | no | **yes** (`judge_noise_floor`) |
-| judge noise보다 작은 delta를 잡음 | no — 동전 던지기를 배포 | **yes** — 믿기 전에 표시 |
+| 반복 변동과 측정 범위를 구분 | 직접 확인 | 구조적 상태와 관측 기록 제공 |
 | silent strict-schema 저하를 표시 | no | **yes** (`silent_degradation_detected`) |
 | 긴 실행 전 wall time 추정 | no | **yes** |
 | 비용 | 무료지만 오도함 | probe ~5회 (provider-dependent) |
@@ -100,13 +101,13 @@ for w in warnings:                 # fail-closed warnings는 load-bearing
 
 | 표면 | 함수 | 뭘 알려주나 |
 |---|---|---|
-| **Judge noise floor** | `judge_noise_floor`, `measure_judge_consistency` | 고정된 쌍을 반복 채점한 점수의 `1 - CV`. 이 floor 아래의 A/B delta는 noise. |
+| **Judge noise floor** | `judge_noise_floor`, `measure_judge_consistency` | 고정된 쌍을 반복 채점한 점수의 clipped CV (`1 - consistency`). 상대 변동 설명이며 A/B 유의성 판정이 아님. |
 | Hard-gate flip rate | `measure_gate_flip_rate` | *같은* 입력에서 pass/fail gate가 얼마나 자주 뒤집히나 — 점수가 안정적이어도 flip하는 gate는 ship 판정을 무작위로 만듦. |
-| Endpoint schema reliability | `probe_strict_schema` | STRICT_SCHEMA parse 성공 비율. `< 0.9` → omegaprompt가 `JSON_OBJECT`로 fallback. silent 저하(200 형태인데 parse 불가)도 표시. |
-| Context budget margin | `compute_context_margin` (chars) / `compute_context_margin_from_texts` (tokenizer-exact) | `1 - (longest_call_tokens / context_window)`. 음수 = overflow 확정. |
+| Endpoint schema reliability | `probe_strict_schema` | STRICT_SCHEMA parse 성공 비율과 silent parse 저하. `JSON_OBJECT` fallback 권고는 advisory이며 runtime이 자동 적용하지 않습니다. artifact의 정책 소비 기록을 확인하세요. |
+| Context budget margin | `compute_context_margin` (chars) / `compute_context_margin_from_texts` (tokenizer-exact) | `1 - (longest_call_tokens / context_window)`. 음수 = 제공된 구성 요소 기준 overflow 추정. 실제 request framing 비용은 별도. |
 | Performance projection | `project_performance` | probe latency × calibration 규모 → 시작 전 wall-time 추정. |
 
-한 번의 호출 — `empirical_preflight()` — 으로 이들을 한 패스에 실행하고 `(judge_quality, endpoint, performance, warnings)`를 리턴합니다. **측정 안 된 필드는 fail-closed** (예: `schema_reliability=1.0`이 아니라 `0.0`)되고 `warnings`에 명시되므로, agent는 항상 "측정된 0"과 "probe를 안 돌림"을 구분할 수 있습니다. CI에서 warnings 리스트는 cosmetic이 아니라 load-bearing으로 다루세요.
+한 번의 `empirical_preflight()`는 `(judge_quality, endpoint, performance, warnings)`를 반환하고 fail-closed 숫자 기본값을 유지합니다. 측정 상태는 `warnings.measurement_status`를 우선 읽고 `probe_accounting`도 함께 저장하세요. warnings 문자열은 사람용 진단이며, 구조적 상태가 없는 구형 결과만 문자열 호환 추론을 사용합니다. 이 추론이 과거 측정 범위를 검증하는 것은 아닙니다.
 
 ## CLI: machine summary, scorecard, threshold gate
 
@@ -177,8 +178,18 @@ python -m mini_omega_lock.mcp --http    # streamable-http
 
 ## 증명하지 않는 것
 
-모델 품질, judge 품질, 부하 상태 provider 신뢰도 벤치마크가 아닙니다. 프로덕션 readiness 증명도 아닙니다. judge 자신의 noise보다 작은 eval delta를 그만 믿게 하려고 좁은 pre-flight 표면(judge noise / endpoint / context / latency)을 측정합니다. 항목별 경계는 [docs/trust_model_kr.md](docs/trust_model_kr.md), [docs/claim_ledger_kr.md](docs/claim_ledger_kr.md) 참조.
+모델 품질, judge 품질, 부하 상태 provider 신뢰도 벤치마크가 아닙니다. 프로덕션 readiness 증명도 아닙니다. 반복 변동과 측정 상태를 확인하도록 좁은 pre-flight 표면(judge variability / endpoint / context / latency)을 측정합니다. A/B 유의성 판단은 별도 비교 설계가 필요합니다. 항목별 경계는 [docs/trust_model_kr.md](docs/trust_model_kr.md), [docs/claim_ledger_kr.md](docs/claim_ledger_kr.md) 참조.
 
 ## License
 
 Apache 2.0. 상세는 [LICENSE](LICENSE).
+
+## 0.8.0: 실제 관측 공유와 측정 상태
+
+- 같은 `(rubric, item, response)`의 consistency와 gate flip은 실제 judge 관측 배치를 공유합니다. 기본 3+5회가 5회로 줄며 각 지표는 요청한 3개·5개 prefix만 사용합니다. 독립 표본 수를 합산하지 않습니다. 호출 순서가 바뀌므로 stateful judge의 수치가 달라질 수 있습니다.
+- 기존 4-tuple과 warnings list 동작을 유지합니다. 반환 warnings의 `measurement_status`와 `probe_accounting`을 함께 저장하세요. CLI/MCP JSON도 두 필드를 제공합니다. 요약은 상태를 우선 읽고 구형 일반 list에는 경고 문자열 호환 읽기를 사용합니다.
+- 상태는 `measured`, `unmeasured`, `insufficient_samples`, `failed`, `estimated`, `not_applicable`입니다. 1회 채점은 변동 측정에 부족합니다. 실패한 호출 시간도 accounting에 포함하고, 성공 호출 latency projection과 구분합니다. provider 내부 재시도·실패 토큰 비용은 관측할 수 없으면 `null`/unknown으로 남깁니다.
+- `judge_noise_floor`는 호환 이름이며 값은 clipped CV입니다. 새 별칭 `judge_relative_variability`도 같은 값입니다. `fitness_noise_floor`는 aggregate fitness의 표준편차입니다. 둘 다 임의 A/B 개선의 유의성을 판정하지 않습니다.
+- CLI: 정상 실행 0은 지정된 측정 완료를 뜻합니다. 미측정·실패·표본 부족·추정은 2, **측정한** 값의 사용자 threshold 위반은 3, 잘못된 입력은 1입니다. threshold 없는 성공을 judge 품질 통과로 해석하지 마세요.
+
+[전후 근거·호환성·재현 명령](docs/upgrade-0.8.0.md). 유료 provider 검증은 수행하지 않았습니다.

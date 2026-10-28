@@ -114,6 +114,9 @@ def run(argv: list[str] | None = None) -> tuple[dict, int]:
     for k in ("mean_call_latency_ms", "projected_wall_time_seconds"):
         if k in perf:
             perf[k] = _TIMING_MASK
+    for k in ("elapsed_ms", "total_elapsed_ms"):
+        if k in result.get("probe_accounting", {}):
+            result["probe_accounting"][k] = _TIMING_MASK
     return result, code
 
 

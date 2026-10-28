@@ -209,10 +209,24 @@ def empirical_preflight(
 ) -> dict:
     """Run the combined judge / endpoint / performance preflight probe.
 
-    Use BEFORE a full omegaprompt calibration to verify the runtime is
-    ship-grade. Costs ``consistency_repeats`` LLM calls on the probe item,
-    plus ``len(strict_schema_probe_messages)`` calls when the strict-schema
-    probe is requested.
+    Measure the narrow preflight surface before a full calibration; this
+    does not approve judge quality or production readiness.
+
+    The shared judge observation batch requests
+    ``max(consistency_repeats, max(2, gate_flip_repeats))`` adapter attempts
+    when the rubric has judge-mode gates and ``gate_flip_repeats > 0``.
+    Otherwise it requests ``consistency_repeats`` attempts. Thus the default
+    3 consistency / 5 gate repeats use 5 actual observations with judge-mode
+    gates, or 3 without them. Both metrics use their requested prefixes of
+    that batch; shared observations are not independent extra samples.
+
+    Add one request per ``strict_schema_probe_messages`` entry when supplied,
+    plus one judge request per ``monotonic_examples`` entry when at least two
+    are supplied. Fitness-sample aggregation and context projection add no
+    provider requests. Failures can terminate a batch early. Read
+    ``probe_accounting`` for actual attempted/successful/failed calls,
+    returned usage and elapsed time including failed attempts; internal
+    provider retries and unreturned failure usage remain unknown.
 
     Args:
         rubric: Path to a JudgeRubric JSON, or an inline rubric dict.

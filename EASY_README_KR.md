@@ -15,7 +15,7 @@ pip install mini-omega-lock
 Python 3.11 이상에서 실행합니다. 설치에는 인터넷이 필요합니다.
 
 ```bash
-python -m pip install mini-omega-lock==0.7.1
+python -m pip install mini-omega-lock==0.8.0
 preflight --help
 python -c "from mini_omega_lock import compute_context_margin; print(compute_context_margin(system_prompt_chars=0, rubric_chars=0, longest_input_chars=380, longest_reference_chars=0, longest_response_chars=0, context_window_tokens=1000))"
 ```
@@ -35,7 +35,7 @@ MCP는 해당 배포명의 `[mcp]` extras와 기존 서버 명령을 사용합�
 
 LLM judge는 *같은* 답에 *같은* 점수를 매번 주지 않습니다. 고정된 답 하나를 다섯 번 채점 → 미묘하게 다른 다섯 점수. 그 흔들림이 judge의 **noise floor**입니다.
 
-규칙: **프롬프트 B가 A를 그 흔들림보다 작은 폭으로 이기면, 그 결과는 추가 근거가 필요합니다.** B를 배포하겠지만 반복 측정과 독립 검증이 필요합니다. 이 도구는 floor 수치를 먼저 줘서 당신 delta가 진짜인지 알려줍니다.
+동일 항목의 반복 CV와 fitness 표준편차는 A/B 유의성 검정이 아닙니다. 두 후보의 대응 표본, 불확실성, 사전 판정 기준을 별도로 확인하세요.
 
 ## 30초 사용법
 
@@ -97,3 +97,13 @@ Exit code: `0` 정상 · `2` 측정 못 한 항목 있음 · `3` 값이 `--fail-
 - Analytical, zero-API 자매: [mini-antemortem-cli](https://pypi.org/project/mini-antemortem-cli/)
 
 License: Apache 2.0. Copyright (c) 2026 Kyunghoon Gwak.
+
+## 0.8.0: 실제 관측 공유와 측정 상태
+
+- 같은 `(rubric, item, response)`의 consistency와 gate flip은 실제 judge 관측 배치를 공유합니다. 기본 3+5회가 5회로 줄며 각 지표는 요청한 3개·5개 prefix만 사용합니다. 독립 표본 수를 합산하지 않습니다. 호출 순서가 바뀌므로 stateful judge의 수치가 달라질 수 있습니다.
+- 기존 4-tuple과 warnings list 동작을 유지합니다. 반환 warnings의 `measurement_status`와 `probe_accounting`을 함께 저장하세요. CLI/MCP JSON도 두 필드를 제공합니다. 요약은 상태를 우선 읽고 구형 일반 list에는 경고 문자열 호환 읽기를 사용합니다.
+- 상태는 `measured`, `unmeasured`, `insufficient_samples`, `failed`, `estimated`, `not_applicable`입니다. 1회 채점은 변동 측정에 부족합니다. 실패한 호출 시간도 accounting에 포함하고, 성공 호출 latency projection과 구분합니다. provider 내부 재시도·실패 토큰 비용은 관측할 수 없으면 `null`/unknown으로 남깁니다.
+- `judge_noise_floor`는 호환 이름이며 값은 clipped CV입니다. 새 별칭 `judge_relative_variability`도 같은 값입니다. `fitness_noise_floor`는 aggregate fitness의 표준편차입니다. 둘 다 임의 A/B 개선의 유의성을 판정하지 않습니다.
+- CLI: 정상 실행 0은 지정된 측정 완료를 뜻합니다. 미측정·실패·표본 부족·추정은 2, **측정한** 값의 사용자 threshold 위반은 3, 잘못된 입력은 1입니다. threshold 없는 성공을 judge 품질 통과로 해석하지 마세요.
+
+[전후 근거·호환성·재현 명령](docs/upgrade-0.8.0.md). 유료 provider 검증은 수행하지 않았습니다.

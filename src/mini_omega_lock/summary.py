@@ -2,12 +2,9 @@
 # Copyright (c) 2026 Kyunghoon Gwak <hibouaile04@gmail.com>
 """Headline summary + scorecard for a mini-omega-lock preflight run.
 
-The package's single most load-bearing number is the **judge noise
-floor**: how much the *same* judge disagrees with itself when it scores
-the *same* (response, rubric) pair repeatedly. An A/B optimisation delta
-smaller than this number is indistinguishable from the judge flipping a
-coin — "an optimization delta smaller than your judge's own noise is not
-real".
+Repeated judge scores report relative variability (clipped CV). Repeated
+aggregate fitness reports absolute standard deviation in fitness units.
+Neither statistic alone tests the significance of an arbitrary A/B delta.
 
 This module turns the four-tuple ``empirical_preflight`` returns into:
 
@@ -27,6 +24,7 @@ from __future__ import annotations
 
 import html
 import json
+from math import isfinite
 from typing import Any, Sequence
 
 # Bump on any breaking change to the summary dict shape. Additive fields
@@ -70,10 +68,9 @@ def judge_noise_floor(judge_quality: Any) -> float:
     * ``1.0`` — the judge's score standard deviation matched its mean
       (maximal measured noise).
 
-    Interpretation: an A/B fitness delta smaller than this is below the
-    judge's own noise floor and should not be trusted as a real
-    improvement. Raise ``consistency_repeats`` and/or ``rescore_count``,
-    or pick a steadier judge, before chasing sub-floor gains.
+    This is a relative variability descriptor for one repeated item, not
+    an A/B significance test. Use paired samples and a declared statistical
+    decision rule for comparisons between candidates.
 
     Args:
         judge_quality: A ``JudgeQualityMeasurement`` (or its ``model_dump``
@@ -85,6 +82,8 @@ def judge_noise_floor(judge_quality: Any) -> float:
     """
     data = _dump(judge_quality)
     consistency = float(data.get("consistency", 0.0))
+    if not isfinite(consistency):
+        raise ValueError("consistency must be finite")
     # Clamp defensively; consistency is already clamped upstream but a
     # hand-built dict could be out of range.
     consistency = max(0.0, min(1.0, consistency))
@@ -126,7 +125,9 @@ def build_summary(
     jq = _dump(judge_quality)
     ep = _dump(endpoint)
     pf = _dump(performance)
-    unmeasured = _unmeasured_fields(warnings)
+    statuses = dict(getattr(warnings, "measurement_status", {}))
+    unmeasured = sorted(k for k, status in statuses.items()
+                        if status not in ("measured", "not_applicable")) if statuses else _unmeasured_fields(warnings)
 
     return {
         "schema_version": SUMMARY_SCHEMA_VERSION,
@@ -145,6 +146,8 @@ def build_summary(
         # --- performance (timing excluded for byte-stability) ---
         "fitness_noise_floor": round(float(pf.get("noise_floor", 0.0)), 12),
         # --- bookkeeping ---
+        "measurement_status": statuses,
+        "judge_relative_variability": judge_noise_floor(jq),
         "warning_count": len(list(warnings)),
         "unmeasured_fields": unmeasured,
         "all_fields_measured": not unmeasured,
@@ -188,8 +191,8 @@ def _render_markdown(summary: dict[str, Any]) -> str:
     lines = [
         "# mini-omega-lock preflight scorecard",
         "",
-        f"**Judge noise floor: `{nf}`** — an A/B fitness delta smaller than "
-        "this is below the judge's own noise and is not a real improvement.",
+        f"**Judge relative variability (clipped CV): `{nf}`** — this describes "
+        "repeated scores; it is not an A/B significance test.",
         "",
         "| Metric | Value |",
         "|---|---|",
@@ -231,7 +234,7 @@ def _render_html(summary: dict[str, Any]) -> str:
 </head>
 <body>
   <p class="headline">Judge noise floor: <code>{nf}</code></p>
-  <p class="sub">An A/B fitness delta smaller than this is below the judge's own noise &mdash; not a real improvement.</p>
+  <p class="sub">Relative variability of repeated scores; not an A/B significance test.</p>
   <table>
     <thead><tr><th>Metric</th><th>Value</th></tr></thead>
     <tbody>

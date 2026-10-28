@@ -23,7 +23,7 @@ pip install mini-omega-lock
 Python 3.11 이상에서 실행합니다. 설치에는 인터넷이 필요합니다.
 
 ```bash
-python -m pip install mini-omega-lock==0.7.1
+python -m pip install mini-omega-lock==0.8.0
 preflight --help
 python -c "from mini_omega_lock import compute_context_margin; print(compute_context_margin(system_prompt_chars=0, rubric_chars=0, longest_input_chars=380, longest_reference_chars=0, longest_response_chars=0, context_window_tokens=1000))"
 ```
@@ -41,9 +41,9 @@ LLM judge는 *같은* 응답에 *같은* 점수를 매번 주지 않습니다. �
 
 이게 중요한 이유는 규칙 하나 때문입니다:
 
-> **judge 자신의 noise보다 작은 최적화 delta는 진짜가 아니다.**
+> **단일 항목의 반복 변동만으로 A/B 개선의 유의성을 판정할 수 없습니다.**
 
-프롬프트 B가 A보다 0.4% 좋게 나왔는데, judge가 *동일한* 답을 재채점할 때 1.2%씩 흔들린다면, 그 "승리"는 noise 안에 있습니다. B를 배포하겠지만 실제로 반복 측정과 독립 검증이 필요합니다입니다. mini-omega-lock은 저렴한 probe call 몇 번으로 A/B delta를 믿기 *전에* 그 floor 수치를 알려줍니다.
+반복 점수의 CV는 상대 변동이고 aggregate fitness의 표준편차는 절대 단위입니다. A/B 판단에는 표본의 대응 관계, 불확실성, 사전 판정 기준이 별도로 필요합니다.
 
 ```bash
 # 한 숫자, Python 불필요, CI 친화적 exit code:
@@ -100,7 +100,7 @@ for w in warnings:                 # fail-closed warnings는 load-bearing
 
 | 표면 | 함수 | 뭘 알려주나 |
 |---|---|---|
-| **Judge noise floor** | `judge_noise_floor`, `measure_judge_consistency` | 고정된 쌍을 반복 채점한 점수의 `1 - CV`. 이 floor 아래의 A/B delta는 noise. |
+| **Judge noise floor** | `judge_noise_floor`, `measure_judge_consistency` | 고정된 쌍을 반복 채점한 점수의 clipped CV (`1 - consistency`). 상대 변동 설명이며 A/B 유의성 판정이 아님. |
 | Hard-gate flip rate | `measure_gate_flip_rate` | *같은* 입력에서 pass/fail gate가 얼마나 자주 뒤집히나 — 점수가 안정적이어도 flip하는 gate는 ship 판정을 무작위로 만듦. |
 | Endpoint schema reliability | `probe_strict_schema` | STRICT_SCHEMA parse 성공 비율. `< 0.9` → omegaprompt가 `JSON_OBJECT`로 fallback. silent 저하(200 형태인데 parse 불가)도 표시. |
 | Context budget margin | `compute_context_margin` (chars) / `compute_context_margin_from_texts` (tokenizer-exact) | `1 - (longest_call_tokens / context_window)`. 음수 = overflow 확정. |
@@ -182,3 +182,13 @@ python -m mini_omega_lock.mcp --http    # streamable-http
 ## License
 
 Apache 2.0. 상세는 [LICENSE](LICENSE).
+
+## 0.8.0: 실제 관측 공유와 측정 상태
+
+- 같은 `(rubric, item, response)`의 consistency와 gate flip은 실제 judge 관측 배치를 공유합니다. 기본 3+5회가 5회로 줄며 각 지표는 요청한 3개·5개 prefix만 사용합니다. 독립 표본 수를 합산하지 않습니다. 호출 순서가 바뀌므로 stateful judge의 수치가 달라질 수 있습니다.
+- 기존 4-tuple과 warnings list 동작을 유지합니다. 반환 warnings의 `measurement_status`와 `probe_accounting`을 함께 저장하세요. CLI/MCP JSON도 두 필드를 제공합니다. 요약은 상태를 우선 읽고 구형 일반 list에는 경고 문자열 호환 읽기를 사용합니다.
+- 상태는 `measured`, `unmeasured`, `insufficient_samples`, `failed`, `estimated`, `not_applicable`입니다. 1회 채점은 변동 측정에 부족합니다. 실패한 호출 시간도 accounting에 포함하고, 성공 호출 latency projection과 구분합니다. provider 내부 재시도·실패 토큰 비용은 관측할 수 없으면 `null`/unknown으로 남깁니다.
+- `judge_noise_floor`는 호환 이름이며 값은 clipped CV입니다. 새 별칭 `judge_relative_variability`도 같은 값입니다. `fitness_noise_floor`는 aggregate fitness의 표준편차입니다. 둘 다 임의 A/B 개선의 유의성을 판정하지 않습니다.
+- CLI: 정상 실행 0은 지정된 측정 완료를 뜻합니다. 미측정·실패·표본 부족·추정은 2, **측정한** 값의 사용자 threshold 위반은 3, 잘못된 입력은 1입니다. threshold 없는 성공을 judge 품질 통과로 해석하지 마세요.
+
+[전후 근거·호환성·재현 명령](docs/upgrade-0.8.0.md). 유료 provider 검증은 수행하지 않았습니다.

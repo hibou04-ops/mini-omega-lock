@@ -20,7 +20,7 @@ If you add a claim to any public doc and do not add a row here, `scripts/check_r
 | # | Claim | Where | Source of truth | Verification command | Status |
 |---|---|---|---|---|---|
 | 1 | "PyPI distribution is `mini-omega-lock`" | README badges, install commands; EASY_READMEs | `pyproject.toml` `[project].name` | `python scripts/generate_readme_claims.py --check` | `generated` |
-| 2 | Package version is `0.5.0` | README PyPI badge | `pyproject.toml` `[project].version` + `mini_omega_lock.__version__` | `python scripts/check_repo_consistency.py` | `generated` |
+| 2 | Package version is generated from current metadata | README PyPI badge | `pyproject.toml` `[project].version` + `mini_omega_lock.__version__` | `python scripts/check_repo_consistency.py` | `generated` |
 | 3 | Requires Python ≥ 3.11 | README badge | `pyproject.toml` `[project].requires-python` | `python scripts/generate_readme_claims.py --check` | `generated` |
 | 4 | Depends on `omegaprompt>=1.1.0` | README parent badge | `pyproject.toml` `[project].dependencies` | `python scripts/check_repo_consistency.py` | `generated` |
 | 5 | Public API names (`empirical_preflight`, `measure_judge_consistency`, …) | README/EASY_READMEs code blocks | `src/mini_omega_lock/__init__.py::__all__` | `python scripts/check_repo_consistency.py` | `source-backed` |
@@ -60,3 +60,11 @@ If you add a claim to any public doc and do not add a row here, `scripts/check_r
 ## Reverting a claim
 
 If a claim cannot be backed by a deterministic artifact or command, **remove it** rather than leaving it un-ledgered. The release-audit script will treat any un-ledgered numeric/feature claim it finds in the README as a release blocker once the corresponding detection rule is added to `check_repo_consistency.py`.
+
+## 0.8.0 검증된 추가 계약
+
+| 주장 | 근거 | 재현 | 상태 |
+|---|---|---|---|
+| 기본 consistency3/gate5의 관측 8→5회, 표본수 보존 | `benchmarks/upgrade-0.8.0/*.json` | `python benchmarks/observation_cost.py` | artifact-backed |
+| 구조적 측정 상태·실패 시간/호출 비용 전달 | `probes.py`, `summary.py`, CLI/MCP | `python -m pytest -q tests/test_observation_contracts.py tests/test_cli.py` | command-backed |
+| CV는 A/B 유의성 판정이 아니며 zero-mean은 명시적 관례 | `docs/upgrade-0.8.0.md` | `python -m pytest -q tests/test_observation_contracts.py` | source-backed |

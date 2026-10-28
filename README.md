@@ -21,7 +21,7 @@ Probe judge consistency, schema behavior, context margin and run projections bef
 Requires Python 3.11+. Installation needs internet.
 
 ```bash
-python -m pip install mini-omega-lock==0.7.1
+python -m pip install mini-omega-lock==0.8.0
 preflight --help
 python -c "from mini_omega_lock import compute_context_margin; print(compute_context_margin(system_prompt_chars=0, rubric_chars=0, longest_input_chars=380, longest_reference_chars=0, longest_response_chars=0, context_window_tokens=1000))"
 ```
@@ -43,7 +43,7 @@ It matters because of one rule:
 
 > **A small delta relative to observed judge variability needs more evidence before acceptance.**
 
-If prompt B scores 0.4% better than prompt A, but your judge swings 1.2% when re-grading the *identical* answer, your delta needs additional evidence. You'd ship B, but you measured a coin flip. mini-omega-lock fires a few cheap probe calls and tells you that floor number *before* you trust the A/B delta.
+Relative repeated-score variability is not comparable directly to an absolute A/B delta. Use a declared comparison design with paired samples and uncertainty before accepting a candidate improvement.
 
 ```bash
 # One number, no Python, CI-friendly exit codes:
@@ -91,7 +91,7 @@ It depends on `omegaprompt` (`>=1.1.0`) to build those records, so `pip install 
 | | Trust the A/B delta | mini-omega-lock |
 |---|---|---|
 | Tells you the judge's self-disagreement | no | **yes** (`judge_noise_floor`) |
-| Catches deltas smaller than judge noise | no — you ship coin flips | **yes** — flagged before you trust them |
+| Repeated-score variability and measurement coverage | manually inspect | explicit metrics and structured states |
 | Flags silent strict-schema degradation | no | **yes** (`silent_degradation_detected`) |
 | Estimates wall time before a long run | no | **yes** |
 | Cost | free, but misleading | ~5 cheap API calls (provider-dependent) |
@@ -100,7 +100,7 @@ It depends on `omegaprompt` (`>=1.1.0`) to build those records, so `pip install 
 
 | Surface | Function | What it tells you |
 |---|---|---|
-| **Judge noise floor** | `judge_noise_floor`, `measure_judge_consistency` | `1 - CV` over repeated scores of one fixed pair. Below this floor, A/B deltas are noise. |
+| **Judge noise floor** | `judge_noise_floor`, `measure_judge_consistency` | Clipped CV (`1 - consistency`) over repeated scores of one fixed pair. Relative variability only; not an A/B significance test. |
 | Hard-gate flip rate | `measure_gate_flip_rate` | How often a pass/fail gate flips on the *same* input — a flipping gate randomises the ship verdict even when the score looks stable. |
 | Endpoint schema reliability | `probe_strict_schema` | STRICT_SCHEMA parse-success fraction. `< 0.9` → omegaprompt falls back to `JSON_OBJECT`. Also flags *silent* degradation (200-shaped but unparseable). |
 | Context budget margin | `compute_context_margin` (chars) / `compute_context_margin_from_texts` (tokenizer-exact) | `1 - (longest_call_tokens / context_window)`. Negative = guaranteed overflow. |
@@ -179,10 +179,20 @@ python -m mini_omega_lock.mcp --http    # streamable-http
 
 ## What this does *not* prove
 
-Not a benchmark of model quality, judge quality, or provider reliability under load. Not a production-readiness proof. It measures a narrow pre-flight surface (judge noise / endpoint / context / latency) so you stop trusting eval deltas that are smaller than your judge's own noise. See [docs/trust_model.md](docs/trust_model.md) and [docs/claim_ledger.md](docs/claim_ledger.md) for the per-claim boundary.
+Not a benchmark of model quality, judge quality, or provider reliability under load. Not a production-readiness proof. It measures a narrow pre-flight surface (judge noise / endpoint / context / latency) without claiming A/B significance from a repeated-item variability statistic. See [docs/trust_model.md](docs/trust_model.md) and [docs/claim_ledger.md](docs/claim_ledger.md) for the per-claim boundary.
 
 ## License
 
 Apache 2.0. See [LICENSE](LICENSE).
 
 **License history.** PyPI distributions of 0.1.0 shipped with an MIT `LICENSE`. The repository was relicensed to Apache 2.0 on 2026-04-22 (commit `ff489a9`); 0.2.0 and all later versions ship under Apache 2.0. Anyone who installed 0.1.0 holds an MIT license to that copy — license changes do not apply retroactively.
+
+## 0.8.0: 실제 관측 공유와 측정 상태
+
+- 같은 `(rubric, item, response)`의 consistency와 gate flip은 실제 judge 관측 배치를 공유합니다. 기본 3+5회가 5회로 줄며 각 지표는 요청한 3개·5개 prefix만 사용합니다. 독립 표본 수를 합산하지 않습니다. 호출 순서가 바뀌므로 stateful judge의 수치가 달라질 수 있습니다.
+- 기존 4-tuple과 warnings list 동작을 유지합니다. 반환 warnings의 `measurement_status`와 `probe_accounting`을 함께 저장하세요. CLI/MCP JSON도 두 필드를 제공합니다. 요약은 상태를 우선 읽고 구형 일반 list에는 경고 문자열 호환 읽기를 사용합니다.
+- 상태는 `measured`, `unmeasured`, `insufficient_samples`, `failed`, `estimated`, `not_applicable`입니다. 1회 채점은 변동 측정에 부족합니다. 실패한 호출 시간도 accounting에 포함하고, 성공 호출 latency projection과 구분합니다. provider 내부 재시도·실패 토큰 비용은 관측할 수 없으면 `null`/unknown으로 남깁니다.
+- `judge_noise_floor`는 호환 이름이며 값은 clipped CV입니다. 새 별칭 `judge_relative_variability`도 같은 값입니다. `fitness_noise_floor`는 aggregate fitness의 표준편차입니다. 둘 다 임의 A/B 개선의 유의성을 판정하지 않습니다.
+- CLI: 정상 실행 0은 지정된 측정 완료를 뜻합니다. 미측정·실패·표본 부족·추정은 2, **측정한** 값의 사용자 threshold 위반은 3, 잘못된 입력은 1입니다. threshold 없는 성공을 judge 품질 통과로 해석하지 마세요.
+
+[전후 근거·호환성·재현 명령](docs/upgrade-0.8.0.md). 유료 provider 검증은 수행하지 않았습니다.

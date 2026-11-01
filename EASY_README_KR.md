@@ -6,6 +6,12 @@
 pip install mini-omega-lock
 ```
 
+## v0.8.2 — 이번 변경
+
+`mini_omega_lock.probes.compute_minimum_detectable_effect()`를 추가했습니다. 기본 `z=1.96`으로 `mean(abs(delta)) + z * population_sigma(abs(delta)) / sqrt(n)`를 계산합니다. 표본 1개는 절대 delta를 반환하고, 빈 표본·비유한 값·잘못된 z는 거부합니다. 제공된 paired 관측을 계산하는 helper이며 표본 설계·검정력·실제 judge 품질을 단독으로 입증하지 않습니다.
+
+MCP 1.x/2.x import 경로 호환 shim(`FastMCP` / `MCPServer`)을 포함합니다. 로컬 검증은 SDK 1.30.0으로 수행했으며 2.x runtime은 미검증이고, 선언된 지원 의존성은 `mcp>=1.0.0,<2.0.0`을 유지합니다.
+
 ## 시작 · 단독 사용 · 도킹
 
 **Omega Verification Suite** — Quiet precision. AI research guided by evidence.
@@ -15,14 +21,14 @@ pip install mini-omega-lock
 Python 3.11 이상에서 실행합니다. 설치에는 인터넷이 필요합니다.
 
 ```bash
-python -m pip install mini-omega-lock==0.8.1
+python -m pip install mini-omega-lock==0.8.2
 preflight --help
 python -c "from mini_omega_lock import compute_context_margin; print(compute_context_margin(system_prompt_chars=0, rubric_chars=0, longest_input_chars=380, longest_reference_chars=0, longest_response_chars=0, context_window_tokens=1000))"
 ```
 
 API 예제 결과 0.9는 문자 수 기반 컨텍스트 추정치입니다. 실제 tokenizer 측정이나 모델 성능 결과가 아닙니다. CLI probe에는 provider 환경이 필요합니다. 미측정 경고는 종료 2, 임계값 위반은 3, 오류는 1입니다. 종료 0만으로 측정값의 적합성을 판단하면 안 됩니다.
 
-[실제 연결 방식과 입력·출력](https://github.com/hibou04-ops/omega-lock/blob/main/DOCKING.md) · [전체 안내](README.md). 두 mini 도구의 현재 검증 조합은 omegaprompt 2.1.2이며, 별도 배포 패키지입니다.
+[실제 연결 방식과 입력·출력](https://github.com/hibou04-ops/omega-lock/blob/main/DOCKING.md) · [전체 안내](README.md). 두 mini 도구는 별도 배포 패키지이며, 이번 release의 오프라인 검증 조합은 omegaprompt 2.2.3입니다.
 
 MCP는 해당 배포명의 `[mcp]` extras와 기존 서버 명령을 사용합니다. 기존 FastMCP 계약은 SDK `>=1.0.0,<2.0.0` 범위로 유지합니다.
 

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Empirical preflight (mini-omega-lock adapter).
 
 Issues a small set of probe calls to measure judge consistency, endpoint
@@ -24,7 +25,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from statistics import mean, pstdev
-from math import isfinite
+from math import isfinite, sqrt
 from time import perf_counter
 from typing import Any
 
@@ -476,6 +477,26 @@ def project_performance(
         projected_wall_time_seconds=projected_s,
         noise_floor=0.0,  # filled in separately by noise_floor_estimate
     )
+
+
+def compute_minimum_detectable_effect(
+    paired_deltas: Sequence[float], confidence_z: float = 1.96
+) -> float:
+    """Return mean absolute delta plus z times its standard error.
+
+    Uses population standard deviation, matching noise_floor_estimate.
+    A singleton has zero standard error and returns its absolute delta;
+    empty samples and nonfinite inputs cannot establish a noise floor.
+    This supplied formula alone does not establish statistical power.
+    """
+    if not isfinite(confidence_z) or confidence_z < 0:
+        raise ValueError("confidence_z must be finite and nonnegative")
+    magnitudes = [abs(delta) for delta in paired_deltas]
+    if not magnitudes:
+        raise ValueError("paired_deltas must contain at least one value")
+    if any(not isfinite(delta) for delta in magnitudes):
+        raise ValueError("paired_deltas must contain only finite numbers")
+    return mean(magnitudes) + confidence_z * pstdev(magnitudes) / sqrt(len(magnitudes))
 
 
 def noise_floor_estimate(

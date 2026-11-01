@@ -15,7 +15,10 @@ import os
 from pathlib import Path
 from typing import Sequence
 
-from mcp.server.fastmcp import FastMCP
+try:
+    from mcp.server.fastmcp import FastMCP
+except ModuleNotFoundError:
+    from mcp.server import MCPServer as FastMCP  # type: ignore[no-redef,attr-defined]
 
 from mini_omega_lock import (
     compute_context_margin as _compute_context_margin,

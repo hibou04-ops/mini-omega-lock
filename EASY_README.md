@@ -6,6 +6,12 @@
 pip install mini-omega-lock
 ```
 
+## v0.8.2 — Release changes
+
+Adds `mini_omega_lock.probes.compute_minimum_detectable_effect()`: `mean(abs(delta)) + z * population_sigma(abs(delta)) / sqrt(n)` with default `z=1.96`. A singleton returns its absolute delta; empty/nonfinite samples and invalid z are rejected. This helper uses supplied paired observations and does not establish a sampling design, statistical power, or live-judge quality by itself.
+
+Includes an MCP 1.x/2.x import-layout compatibility shim (`FastMCP` / `MCPServer`). Local verification used SDK 1.30.0; SDK 2.x runtime behavior is not verified, and the declared supported dependency remains `mcp>=1.0.0,<2.0.0`.
+
 ## Start here · Standalone use · Integration/Docking
 
 **Omega Verification Suite** — Quiet precision. AI research guided by evidence.
@@ -15,14 +21,14 @@ Probe judge consistency, schema behavior, context margin and run projections bef
 Requires Python 3.11+. Installation needs internet.
 
 ```bash
-python -m pip install mini-omega-lock==0.8.1
+python -m pip install mini-omega-lock==0.8.2
 preflight --help
 python -c "from mini_omega_lock import compute_context_margin; print(compute_context_margin(system_prompt_chars=0, rubric_chars=0, longest_input_chars=380, longest_reference_chars=0, longest_response_chars=0, context_window_tokens=1000))"
 ```
 
 The offline API example prints 0.9: a character-based context projection, not an exact tokenizer measurement or model-quality result. Full preflight CLI probes require the selected provider infrastructure. Unmeasured warnings give exit 2; threshold breaches give 3; usage/runtime errors give 1. Exit 0 means requested measurements ran, not that their values are acceptable.
 
-omegaprompt>=1.1.0 is required and installed automatically; no calibration pipeline is needed to use the probes. The supported current combination is omegaprompt 2.1.2. Pack judge_quality, endpoint, performance and warnings into PreflightReport, then derive_adaptation_plan. The package is not the omega-lock search engine.
+omegaprompt>=1.1.0 is required and installed automatically; no calibration pipeline is needed to use the probes. This release was tested offline with omegaprompt 2.2.3. Pack judge_quality, endpoint, performance and warnings into PreflightReport, then derive_adaptation_plan. The package is not the omega-lock search engine.
 
 [Docking contracts and runnable data handoff](https://github.com/hibou04-ops/omega-lock/blob/main/DOCKING.md) · [Full guide](README.md).
 

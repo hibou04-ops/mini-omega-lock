@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.8.2] - 2026-11-01
+
+Adds `mini_omega_lock.probes.compute_minimum_detectable_effect()`: `mean(abs(delta)) + z * population_sigma(abs(delta)) / sqrt(n)` with default `z=1.96`. A singleton returns its absolute delta; empty/nonfinite samples and invalid z are rejected. This helper uses supplied paired observations and does not establish a sampling design, statistical power, or live-judge quality by itself.
+
+Includes an MCP 1.x/2.x import-layout compatibility shim (`FastMCP` / `MCPServer`). Local verification used SDK 1.30.0; SDK 2.x runtime behavior is not verified, and the declared supported dependency remains `mcp>=1.0.0,<2.0.0`.
+
 ## 0.8.1 - 2026-10-28
 
 MCP empirical_preflight의 등록 설명에서 호출 수를 consistency_repeats만으로 안내하던 오류를 교정했습니다. judge-mode gate가 있으면 공유 배치는 max(consistency_repeats, max(2, gate_flip_repeats))이며, 기본 3/5 반복은 실제 관측 5개를 사용합니다. 선택한 schema·monotonic probe의 추가 요청과 실패 attempt accounting, 관측할 수 없는 provider 내부 재시도·반환되지 않은 비용도 설명합니다. 영문 EASY 안내서의 schema fallback도 자동 실행이 아닌 advisory 권고로 바로잡았습니다.

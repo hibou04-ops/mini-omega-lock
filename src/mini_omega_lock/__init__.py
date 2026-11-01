@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """mini-omega-lock - empirical preflight probes for omegaprompt calibration.
 
 Issues small probe calls to measure judge consistency, endpoint schema
@@ -21,6 +22,7 @@ keeps a regenerated copy in sync with this module)::
         compute_context_margin,
         compute_context_margin_from_texts,
         # performance / noise
+        compute_minimum_detectable_effect,
         project_performance,
         noise_floor_estimate,
         # headline summary + scorecard helpers
@@ -42,6 +44,7 @@ issues real provider calls through :class:`omegaprompt.providers.LLMProvider`.
 from mini_omega_lock.probes import (
     compute_context_margin,
     compute_context_margin_from_texts,
+    compute_minimum_detectable_effect,
     empirical_preflight,
     measure_gate_flip_rate,
     measure_judge_consistency,
@@ -56,12 +59,13 @@ from mini_omega_lock.summary import (
     render_scorecard,
 )
 
-__version__ = "0.8.1"
+__version__ = "0.8.2"
 
 __all__ = [
     "build_summary",
     "compute_context_margin",
     "compute_context_margin_from_texts",
+    "compute_minimum_detectable_effect",
     "empirical_preflight",
     "judge_noise_floor",
     "measure_gate_flip_rate",

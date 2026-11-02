@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.4] - 2026-11-02
+
+- Add optional real-omegaprompt integration tests for vendored model schemas, JSON roundtrips, Enum values and validation errors.
+- Skip the optional integration file only when the parent package is absent; retain the standalone dependency boundary.
+- Cover Python-only schema classes, typed parsed responses, degradation fields and provider/judge exception causes through the actual bridge.
+- Correct the current guide: 0.8.3 is published on PyPI; 0.8.4 source publication is a separate event.
+
 ## [0.8.3] - 2026-11-02
 
 - Remove the required omegaprompt dependency; retain it only in optional `[bridge]`.

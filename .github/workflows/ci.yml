@@ -3,6 +3,7 @@ name: ci
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
 
 # Hardening notes:
@@ -32,7 +33,8 @@ jobs:
       - name: Install package + test + mcp extras
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev,mcp]"
+          python -m pip install -e ".[dev,mcp,bridge]"
+          python -m pip install --no-cache-dir "omegaprompt @ https://files.pythonhosted.org/packages/c5/c5/2859eb98f233bf2855b4cd2fede3bdb5bbde593d49dd51d161d2f8bc5a42/omegaprompt-2.2.5-py3-none-any.whl#sha256=127eb50b1a7b100a932c2e893dc8af10ffb2a4bdd18bd028a19ca5222815d43b"
       - name: Run pytest
         run: python -m pytest -q
       - name: Generated claims drift

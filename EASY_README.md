@@ -6,11 +6,11 @@ Empirical preflight for repeated judge variability and missing measurements befo
 
 Repository: `hibou04-ops/mini-omega-lock` · PyPI: `mini-omega-lock` · import: `mini_omega_lock` · CLI: `preflight` · MCP: `mini-omega-lock-mcp` with `mini-omega-lock[mcp]`
 
-## 0.8.3 — Standalone installation and statistical naming
+## 0.8.4 — Optional bridge contract regression checks
 
 The sole required dependency is `pydantic>=2.6.0`. Necessary contracts, provider boundaries and judge code are included under internal `_vendor`, allowing core imports, CLI and fake-provider demos without omegaprompt, omega-lock, NumPy or provider SDKs. SDKs load lazily when a live provider is selected. `omegaprompt>=1.1.0` is confined to optional extra `[bridge]`.
 
-Requires Python 3.11+. This checkout has source version **0.8.3**. The commands below install the checkout. Git tags and PyPI publication are separate; availability of the new source version on PyPI is not claimed.
+Requires Python 3.11+. This checkout has source version **0.8.4**. The commands below install the checkout. The previous [0.8.3 has been published on PyPI](https://pypi.org/project/mini-omega-lock/0.8.3/). This document describes 0.8.4 source changes and does not claim the new version is already published on PyPI.
 
 ```bash
 python -m pip install .
@@ -66,6 +66,19 @@ mini-omega-lock-mcp
 ```
 
 Supported MCP SDK range is `>=1.0.0,<2.0.0`; 2.x runtime behavior is unverified. Install `[bridge]` for parent integration. Local `PreflightReport` and adaptation work without the parent. Convert reports with `mini_omega_lock.bridge.to_omegaprompt_report(report)`; wrap an existing parent provider with `adapt_omegaprompt_provider(provider)` before passing it to the local `LLMJudge`. Model classes are not assumed to share identity.
+
+## Optional bridge contract checks
+
+Tests compare field and validation schemas plus Enum values between vendored models and the actual installed `omegaprompt`, then roundtrip JSON in both directions. Invalid inputs must retain matching error types and locations. These checks make no live provider calls.
+
+```bash
+python -m pip install ".[dev,mcp,bridge]"
+python -m pytest -m bridge tests/test_bridge_contracts.py
+```
+
+Only an absent parent skips this optional integration file. Broken imports or changed contracts in an installed parent fail. Standalone core tests still run without the parent; required dependencies are unchanged.
+
+`ProviderRequest.output_schema` is a Python class, so JSON does not transmit its class identity. A concrete `ProviderResponse.parsed` type must be restored through an explicit schema. Tests exercise the actual provider bridge, user schemas, degradation fields and original exception causes. `ProviderError` and `JudgeError` are distinct `RuntimeError` subclasses, not JSON models.
 
 ## Evidence and documentation
 

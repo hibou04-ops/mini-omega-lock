@@ -6,11 +6,11 @@
 
 Repository: `hibou04-ops/mini-omega-lock` · PyPI: `mini-omega-lock` · import: `mini_omega_lock` · CLI: `preflight` · MCP: `mini-omega-lock-mcp` with `mini-omega-lock[mcp]`
 
-## 0.8.3 — 독립 설치와 통계 명칭
+## 0.8.4 — 선택 bridge 계약 회귀 검증
 
 기본 필수 의존성은 `pydantic>=2.6.0` 하나입니다. 필요한 계약·provider 경계·judge 코드를 내부 `_vendor` namespace에 포함해 `omegaprompt`, `omega-lock`, NumPy, provider SDK 없이 core import·CLI·fake-provider 데모가 동작합니다. SDK는 live provider를 선택할 때 지연 import합니다. `omegaprompt>=1.1.0`은 선택 extra `[bridge]`에만 있습니다.
 
-Python 3.11+가 필요합니다. 이 checkout의 소스 버전은 **0.8.3**입니다. 아래 명령은 checkout을 설치합니다. Git 태그와 PyPI 배포는 별도이며 새 소스 버전의 PyPI 게시를 주장하지 않습니다.
+Python 3.11+가 필요합니다. 이 checkout의 소스 버전은 **0.8.4**입니다. 아래 명령은 checkout을 설치합니다. 이전 [0.8.3은 PyPI에 게시되었습니다](https://pypi.org/project/mini-omega-lock/0.8.3/). 이 문서는 0.8.4 소스 변경을 설명하며 새 버전의 PyPI 게시를 선주장하지 않습니다.
 
 ```bash
 python -m pip install .
@@ -66,6 +66,19 @@ mini-omega-lock-mcp
 ```
 
 MCP SDK 지원 범위는 `>=1.0.0,<2.0.0`이며 2.x 동작은 검증하지 않았습니다. parent 연동에는 `[bridge]`를 설치합니다. 로컬 `PreflightReport`와 adaptation은 parent 없이 동작합니다. `mini_omega_lock.bridge.to_omegaprompt_report(report)`로 보고서를 변환하고, 기존 parent provider를 로컬 `LLMJudge`에 넣을 때는 `adapt_omegaprompt_provider(provider)`로 감쌉니다. 모델 클래스 identity를 공유한다고 가정하지 않습니다.
+
+## 선택 bridge 계약 검증
+
+실제 설치된 `omegaprompt` 모델과 vendored 모델의 필드·검증 schema·Enum 값을 비교하고 JSON을 양방향으로 왕복합니다. 검증 오류의 종류와 위치도 비교합니다. 아래 검사는 live provider를 호출하지 않습니다.
+
+```bash
+python -m pip install ".[dev,mcp,bridge]"
+python -m pytest -m bridge tests/test_bridge_contracts.py
+```
+
+parent 패키지가 없을 때만 이 선택 통합 검사 파일을 건너뜁니다. 설치된 parent의 import나 계약이 깨졌으면 실패합니다. 독립 core 검사는 parent 없이 계속 실행하며 필수 의존성은 늘리지 않았습니다.
+
+`ProviderRequest.output_schema`는 Python 클래스이므로 JSON으로 클래스 identity를 전송하지 않습니다. `ProviderResponse.parsed`의 구체적인 타입은 명시한 schema로 복원해야 합니다. 실제 provider bridge 검사에서 이 경계와 사용자 schema·degradation 필드·원래 예외 cause 보존을 확인합니다. `ProviderError`와 `JudgeError`는 JSON 모델이 아닌 서로 다른 `RuntimeError` 하위 타입입니다.
 
 ## 근거와 문서
 

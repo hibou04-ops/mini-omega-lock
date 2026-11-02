@@ -5,14 +5,14 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from omegaprompt.domain.dataset import DatasetItem
-from omegaprompt.domain.enums import (
+from mini_omega_lock._vendor.domain.dataset import DatasetItem
+from mini_omega_lock._vendor.domain.enums import (
     OutputBudgetBucket,
     ReasoningProfile,
     ResponseSchemaMode,
 )
-from omegaprompt.domain.judge import Dimension, HardGate, JudgeResult, JudgeRubric
-from omegaprompt.judges.llm_judge import LLMJudge
+from mini_omega_lock._vendor.domain.judge import Dimension, HardGate, JudgeResult, JudgeRubric
+from mini_omega_lock._vendor.judges.llm_judge import LLMJudge
 from mini_omega_lock.probes import (
     compute_context_margin,
     empirical_preflight,
@@ -21,7 +21,7 @@ from mini_omega_lock.probes import (
     probe_strict_schema,
     project_performance,
 )
-from omegaprompt.providers.base import (
+from mini_omega_lock._vendor.providers.base import (
     ProviderError,
     ProviderRequest,
     ProviderResponse,
@@ -64,7 +64,7 @@ class _ScriptedJudgeProvider:
         )
 
     def capabilities(self):
-        from omegaprompt.providers.base import CapabilityTier, ProviderCapabilities
+        from mini_omega_lock._vendor.providers.base import CapabilityTier, ProviderCapabilities
 
         return ProviderCapabilities(
             provider="anthropic",
@@ -327,7 +327,7 @@ def test_empirical_preflight_warns_on_silent_degradation():
             )
 
         def capabilities(self):
-            from omegaprompt.providers.base import CapabilityTier, ProviderCapabilities
+            from mini_omega_lock._vendor.providers.base import CapabilityTier, ProviderCapabilities
 
             return ProviderCapabilities(
                 provider="anthropic",

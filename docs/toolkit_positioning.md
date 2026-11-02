@@ -49,7 +49,7 @@ Both emit `omegaprompt.preflight.contracts.PreflightReport`-compatible records. 
 
 - `mini-omega-lock` is at PyPI Development Status `3 - Alpha`. The public API (`__all__` in `mini_omega_lock/__init__.py`) is the only stable surface; everything in `mini_omega_lock.probes` is also stable but private helpers may change.
 - The 0.4.0 release changed `empirical_preflight` from a 3-tuple to a 4-tuple (adds `warnings`). Pre-0.4 callers must update their unpacking — see `tests/test_fail_closed_defaults.py::test_empirical_preflight_returns_4_tuple_not_3_tuple`.
-- The minimum `omegaprompt` pin is the one in `pyproject.toml` (regenerated into `docs/generated/claims.md`). Older `omegaprompt` versions may lack the contracts this package imports.
+- The base install has local contracts. The optional bridge minimum is declared in `pyproject.toml` and regenerated into `docs/generated/claims.md`. Interchange with the parent validates JSON through the explicit bridge.
 
 ## Cross-toolkit cookbook
 

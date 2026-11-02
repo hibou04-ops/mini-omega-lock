@@ -26,8 +26,8 @@ import sys
 from contextlib import redirect_stdout
 from pathlib import Path
 
-from omegaprompt.domain.judge import JudgeResult
-from omegaprompt.providers.base import (
+from mini_omega_lock._vendor.domain.judge import JudgeResult
+from mini_omega_lock._vendor.providers.base import (
     CapabilityTier,
     ProviderCapabilities,
     ProviderResponse,
@@ -88,7 +88,7 @@ _ITEM = json.dumps({"id": "probe-1", "input": "What is 2+2?", "reference": "4"})
 
 def run(argv: list[str] | None = None) -> tuple[dict, int]:
     """Invoke cli.main with a patched provider; return (masked_result, exit_code)."""
-    import omegaprompt.providers as _providers
+    import mini_omega_lock._vendor.providers as _providers
     from mini_omega_lock import cli
 
     original = _providers.make_provider

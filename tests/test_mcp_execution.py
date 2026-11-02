@@ -17,8 +17,8 @@ import pytest
 # so the default `pytest -q` (without `--extra mcp`) doesn't error out.
 pytest.importorskip("mcp")
 
-from omegaprompt.domain.judge import Dimension, HardGate, JudgeResult, JudgeRubric
-from omegaprompt.providers.base import (
+from mini_omega_lock._vendor.domain.judge import Dimension, HardGate, JudgeResult, JudgeRubric
+from mini_omega_lock._vendor.providers.base import (
     CapabilityTier,
     ProviderCapabilities,
     ProviderResponse,
@@ -68,7 +68,7 @@ class _ScriptedProvider:
 def _patch_make_provider(monkeypatch):
     """Force the MCP wrapper to use the scripted provider regardless of name."""
     monkeypatch.setattr(
-        "omegaprompt.providers.make_provider",
+        "mini_omega_lock._vendor.providers.make_provider",
         lambda *a, **kw: _ScriptedProvider(),
     )
 
@@ -227,7 +227,7 @@ def test_mcp_probe_strict_schema_executes(mcp_server, monkeypatch):
 
 def test_mcp_probe_strict_schema_flags_silent_degradation(mcp_server, monkeypatch):
     """A provider returning parsed=None without raising -> silent degradation."""
-    from omegaprompt.providers.base import ProviderResponse
+    from mini_omega_lock._vendor.providers.base import ProviderResponse
 
     class _NoneProvider:
         name = "anthropic"
@@ -246,7 +246,7 @@ def test_mcp_probe_strict_schema_flags_silent_degradation(mcp_server, monkeypatc
             )
 
     monkeypatch.setattr(
-        "omegaprompt.providers.make_provider",
+        "mini_omega_lock._vendor.providers.make_provider",
         lambda *a, **kw: _NoneProvider(),
     )
     result = mcp_server.probe_strict_schema(

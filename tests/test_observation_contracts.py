@@ -1,7 +1,7 @@
 """Actual observations, sample reuse and failure cost have explicit provenance."""
 import pytest
-from omegaprompt.domain.dataset import DatasetItem
-from omegaprompt.domain.judge import Dimension, HardGate, JudgeResult, JudgeRubric
+from mini_omega_lock._vendor.domain.dataset import DatasetItem
+from mini_omega_lock._vendor.domain.judge import Dimension, HardGate, JudgeResult, JudgeRubric
 
 from mini_omega_lock.probes import empirical_preflight, noise_floor_estimate
 from mini_omega_lock.summary import build_summary

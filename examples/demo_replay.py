@@ -25,11 +25,11 @@ from __future__ import annotations
 import sys
 from typing import Any
 
-from omegaprompt.domain.dataset import DatasetItem
-from omegaprompt.domain.judge import Dimension, HardGate, JudgeResult, JudgeRubric
-from omegaprompt.judges.llm_judge import LLMJudge
-from omegaprompt.preflight import PreflightReport, derive_adaptation_plan
-from omegaprompt.providers.base import (
+from mini_omega_lock._vendor.domain.dataset import DatasetItem
+from mini_omega_lock._vendor.domain.judge import Dimension, HardGate, JudgeResult, JudgeRubric
+from mini_omega_lock._vendor.judges.llm_judge import LLMJudge
+from mini_omega_lock._vendor.preflight import PreflightReport, derive_adaptation_plan
+from mini_omega_lock._vendor.providers.base import (
     CapabilityTier,
     ProviderCapabilities,
     ProviderResponse,

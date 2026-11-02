@@ -22,7 +22,7 @@ If you add a claim to any public doc and do not add a row here, `scripts/check_r
 | 1 | "PyPI distribution is `mini-omega-lock`" | README badges, install commands; EASY_READMEs | `pyproject.toml` `[project].name` | `python scripts/generate_readme_claims.py --check` | `generated` |
 | 2 | Package version is generated from current metadata | README PyPI badge | `pyproject.toml` `[project].version` + `mini_omega_lock.__version__` | `python scripts/check_repo_consistency.py` | `generated` |
 | 3 | Requires Python ≥ 3.11 | README badge | `pyproject.toml` `[project].requires-python` | `python scripts/generate_readme_claims.py --check` | `generated` |
-| 4 | Depends on `omegaprompt>=1.1.0` | README parent badge | `pyproject.toml` `[project].dependencies` | `python scripts/check_repo_consistency.py` | `generated` |
+| 4 | Optional bridge uses `omegaprompt>=1.1.0` | README parent badge | `pyproject.toml` `[project.optional-dependencies].bridge` | `python scripts/check_repo_consistency.py` | `generated` |
 | 5 | Public API names (`empirical_preflight`, `measure_judge_consistency`, …) | README/EASY_READMEs code blocks | `src/mini_omega_lock/__init__.py::__all__` | `python scripts/check_repo_consistency.py` | `source-backed` |
 | 6 | MCP server exposes ten tools | README, `mcp/__init__.py` docstring | `src/mini_omega_lock/mcp/server.py` `@mcp_app.tool()` decorators | `python scripts/generate_readme_claims.py --check` | `generated` |
 | 7 | MCP optional extra is `mcp` | README, EASY_READMEs | `pyproject.toml` `[project.optional-dependencies]` | `python scripts/check_repo_consistency.py` | `generated` |

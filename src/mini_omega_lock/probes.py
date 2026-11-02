@@ -29,20 +29,20 @@ from math import isfinite, sqrt
 from time import perf_counter
 from typing import Any
 
-from omegaprompt.domain.dataset import DatasetItem
-from omegaprompt.domain.enums import (
+from mini_omega_lock._vendor.domain.dataset import DatasetItem
+from mini_omega_lock._vendor.domain.enums import (
     OutputBudgetBucket,
     ReasoningProfile,
     ResponseSchemaMode,
 )
-from omegaprompt.domain.judge import JudgeResult, JudgeRubric
-from omegaprompt.judges.llm_judge import LLMJudge
-from omegaprompt.preflight.contracts import (
+from mini_omega_lock._vendor.domain.judge import JudgeResult, JudgeRubric
+from mini_omega_lock._vendor.judges.llm_judge import LLMJudge
+from mini_omega_lock._vendor.preflight.contracts import (
     EndpointMeasurement,
     JudgeQualityMeasurement,
     PerformanceMeasurement,
 )
-from omegaprompt.providers.base import (
+from mini_omega_lock._vendor.providers.base import (
     LLMProvider,
     ProviderError,
     ProviderRequest,
@@ -479,10 +479,10 @@ def project_performance(
     )
 
 
-def compute_minimum_detectable_effect(
+def compute_empirical_noise_ceiling(
     paired_deltas: Sequence[float], confidence_z: float = 1.96
 ) -> float:
-    """Return mean absolute delta plus z times its standard error.
+    """Return an empirical absolute-noise ceiling: mean + z * population SE.
 
     Uses population standard deviation, matching noise_floor_estimate.
     A singleton has zero standard error and returns its absolute delta;
@@ -497,6 +497,10 @@ def compute_minimum_detectable_effect(
     if any(not isfinite(delta) for delta in magnitudes):
         raise ValueError("paired_deltas must contain only finite numbers")
     return mean(magnitudes) + confidence_z * pstdev(magnitudes) / sqrt(len(magnitudes))
+
+
+# Compatibility alias: retain exactly the same callable and behavior.
+compute_minimum_detectable_effect = compute_empirical_noise_ceiling
 
 
 def noise_floor_estimate(
@@ -789,3 +793,12 @@ def empirical_preflight(
 
 # Re-export typing hint for downstream callers.
 _ANY: Any = None
+
+
+__all__ = [
+    "compute_context_margin", "compute_context_margin_from_texts",
+    "compute_empirical_noise_ceiling", "compute_minimum_detectable_effect",
+    "empirical_preflight", "measure_gate_flip_rate", "measure_judge_consistency",
+    "measure_scale_monotonicity", "noise_floor_estimate", "probe_strict_schema",
+    "project_performance",
+]

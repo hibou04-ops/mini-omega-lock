@@ -31,6 +31,7 @@ README = REPO_ROOT / "README.md"
 EASY_EN = REPO_ROOT / "EASY_README.md"
 EASY_KR = REPO_ROOT / "EASY_README_KR.md"
 README_KR = REPO_ROOT / "README_KR.md"
+README_KO = REPO_ROOT / "README.ko.md"
 
 # We re-use these from the generator so the two stay in sync without
 # duplicating parse code.
@@ -176,6 +177,14 @@ def check_top_links_exist(facts: dict, issues: list[Issue]) -> None:
                     f"link target does not exist: {target!r}",
                 )
             )
+
+
+def check_korean_readme_mirror(_facts: dict, issues: list[Issue]) -> None:
+    """Preserve the legacy filename as an exact canonical Korean mirror."""
+    if not README_KO.exists():
+        issues.append(Issue("README.ko.md", "canonical Korean README missing"))
+    elif not README_KR.exists() or README_KO.read_bytes() != README_KR.read_bytes():
+        issues.append(Issue("README_KR.md", "must match canonical README.ko.md"))
 
 
 def check_easy_readme_kr_link(_facts: dict, issues: list[Issue]) -> None:
@@ -434,6 +443,7 @@ CHECKS = [
     check_version_consistency,
     check_readme_badges,
     check_top_links_exist,
+    check_korean_readme_mirror,
     check_easy_readme_kr_link,
     check_install_and_import_names,
     check_mcp_run_command,

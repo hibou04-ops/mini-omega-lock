@@ -96,7 +96,7 @@ mcp_app = FastMCP(
 
 
 def _resolve_rubric(r):
-    from omegaprompt.domain import JudgeRubric
+    from mini_omega_lock._vendor.domain import JudgeRubric
 
     if isinstance(r, JudgeRubric):
         return r
@@ -112,7 +112,7 @@ def _resolve_rubric(r):
 
 
 def _resolve_item(i):
-    from omegaprompt.domain import DatasetItem
+    from mini_omega_lock._vendor.domain import DatasetItem
 
     if isinstance(i, DatasetItem):
         return i
@@ -122,8 +122,8 @@ def _resolve_item(i):
 
 
 def _build_judge(provider):
-    from omegaprompt.judges import LLMJudge
-    from omegaprompt.providers import make_provider
+    from mini_omega_lock._vendor.judges import LLMJudge
+    from mini_omega_lock._vendor.providers import make_provider
 
     if isinstance(provider, str):
         provider_obj = make_provider(provider)
@@ -297,14 +297,14 @@ def empirical_preflight(
     schema_probes_seq: tuple = ()
     schema_output_type: type | None = None
     if strict_schema_probe_messages:
-        from omegaprompt.domain.enums import (
+        from mini_omega_lock._vendor.domain.enums import (
             OutputBudgetBucket,
             ReasoningProfile,
             ResponseSchemaMode,
         )
-        from omegaprompt.domain.judge import JudgeResult
-        from omegaprompt.providers import make_provider as _mp
-        from omegaprompt.providers.base import ProviderRequest
+        from mini_omega_lock._vendor.domain.judge import JudgeResult
+        from mini_omega_lock._vendor.providers import make_provider as _mp
+        from mini_omega_lock._vendor.providers.base import ProviderRequest
 
         if strict_schema_provider is None:
             schema_provider_obj = judge.provider
@@ -607,14 +607,14 @@ def probe_strict_schema(
         ``context_budget_margin`` placeholder, ``caching_active``,
         ``silent_degradation_detected``).
     """
-    from omegaprompt.domain.enums import (
+    from mini_omega_lock._vendor.domain.enums import (
         OutputBudgetBucket,
         ReasoningProfile,
         ResponseSchemaMode,
     )
-    from omegaprompt.domain.judge import JudgeResult
-    from omegaprompt.providers import make_provider as _mp
-    from omegaprompt.providers.base import ProviderRequest
+    from mini_omega_lock._vendor.domain.judge import JudgeResult
+    from mini_omega_lock._vendor.providers import make_provider as _mp
+    from mini_omega_lock._vendor.providers.base import ProviderRequest
 
     if isinstance(provider, str):
         provider_obj = _mp(provider)
@@ -717,8 +717,8 @@ def derive_adaptation_plan(
     Returns:
         AdaptationPlan dict (``plan.model_dump()``).
     """
-    from omegaprompt.preflight import PreflightReport, derive_adaptation_plan as _dap
-    from omegaprompt.preflight.contracts import (
+    from mini_omega_lock._vendor.preflight import PreflightReport, derive_adaptation_plan as _dap
+    from mini_omega_lock._vendor.preflight.contracts import (
         EndpointMeasurement,
         JudgeQualityMeasurement,
         PerformanceMeasurement,

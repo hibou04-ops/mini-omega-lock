@@ -9,3 +9,7 @@ PRE_EXISTING_IP.md in this repository.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 see LICENSE file for the full license text.
+
+This product contains adapted leaf contracts and probe support from
+omegaprompt (Apache-2.0), Copyright 2026 Kyunghoon Gwak. See
+src/mini_omega_lock/_vendor/NOTICE and VENDORED.md for source provenance.

@@ -1,3 +1,5 @@
+> Historical design note for the pre-decoupling v0.8.2 source. The current implementation uses local leaf contracts and optional [bridge]; see ../VENDORED.md and tests/test_standalone.py. Statements below describe the earlier dependency boundary.
+
 # Decoupling notes (omegaprompt) — analysis only, NOT implemented
 
 > **Status: deliberately not implemented.** Making `omegaprompt` optional

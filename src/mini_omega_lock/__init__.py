@@ -22,7 +22,8 @@ keeps a regenerated copy in sync with this module)::
         compute_context_margin,
         compute_context_margin_from_texts,
         # performance / noise
-        compute_minimum_detectable_effect,
+        compute_empirical_noise_ceiling,
+    compute_minimum_detectable_effect,
         project_performance,
         noise_floor_estimate,
         # headline summary + scorecard helpers
@@ -31,19 +32,21 @@ keeps a regenerated copy in sync with this module)::
         render_scorecard,
     )
 
-Separate package; not part of the main ``omegaprompt`` install. Install
-alongside omegaprompt when you want to augment the preflight plugin
-interface with real probe measurements::
+The base package requires Pydantic only. Local contracts and fake-provider
+probes work without omegaprompt or provider SDKs. For explicit parent
+integration install the optional bridge extra and convert records::
 
-    pip install omegaprompt mini-omega-lock
+    pip install "mini-omega-lock[bridge]"
 
-Runs entirely offline in tests (SDK clients mocked); production use
-issues real provider calls through :class:`omegaprompt.providers.LLMProvider`.
+Runs entirely offline in tests (SDK clients mocked); production callers
+install their selected SDK separately. See mini_omega_lock.bridge for
+parent provider and record conversion boundaries.
 """
 
 from mini_omega_lock.probes import (
     compute_context_margin,
     compute_context_margin_from_texts,
+    compute_empirical_noise_ceiling,
     compute_minimum_detectable_effect,
     empirical_preflight,
     measure_gate_flip_rate,
@@ -59,12 +62,13 @@ from mini_omega_lock.summary import (
     render_scorecard,
 )
 
-__version__ = "0.8.2"
+__version__ = "0.8.3"
 
 __all__ = [
     "build_summary",
     "compute_context_margin",
     "compute_context_margin_from_texts",
+    "compute_empirical_noise_ceiling",
     "compute_minimum_detectable_effect",
     "empirical_preflight",
     "judge_noise_floor",

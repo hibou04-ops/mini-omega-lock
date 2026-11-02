@@ -49,7 +49,7 @@
 
 - `mini-omega-lock`은 PyPI Development Status `3 - Alpha`. `mini_omega_lock/__init__.py`의 `__all__`만 안정 surface; `mini_omega_lock.probes`도 안정이지만 private helper는 변경 가능.
 - 0.4.0에서 `empirical_preflight`는 3-tuple에서 4-tuple로 변경(`warnings` 추가). 0.4 이전 호출자는 unpacking 업데이트 필요 — `tests/test_fail_closed_defaults.py::test_empirical_preflight_returns_4_tuple_not_3_tuple` 참조.
-- 최소 `omegaprompt` 핀은 `pyproject.toml`의 값 (regenerated into `docs/generated/claims_kr.md`). 더 낮은 `omegaprompt` 버전은 본 패키지가 import하는 contract를 갖지 않을 수 있음.
+- 기본 설치는 로컬 계약을 사용합니다. 선택적인 bridge의 최소 부모 버전은 pyproject.toml에 선언하고 generated claims에 반영합니다. 부모와의 교환은 명시적인 JSON 검증 경계를 사용합니다.
 
 ## Cross-toolkit cookbook
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.3] - 2026-11-02
+
+- Remove the required omegaprompt dependency; retain it only in optional `[bridge]`.
+- Ship the local contract support needed for standalone imports, CLI and offline fixtures; preserve vendored attribution.
+- Make parent integration explicit through JSON-boundary conversion.
+- Synchronize English and canonical Korean READMEs; retain the identical legacy Korean copy.
+- Expose `compute_empirical_noise_ceiling` as the canonical statistic; preserve `compute_minimum_detectable_effect` as the identical callable alias.
+
 ## [0.8.2] - 2026-11-01
 
 Adds `mini_omega_lock.probes.compute_minimum_detectable_effect()`: `mean(abs(delta)) + z * population_sigma(abs(delta)) / sqrt(n)` with default `z=1.96`. A singleton returns its absolute delta; empty/nonfinite samples and invalid z are rejected. This helper uses supplied paired observations and does not establish a sampling design, statistical power, or live-judge quality by itself.

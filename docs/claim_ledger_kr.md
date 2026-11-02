@@ -22,7 +22,7 @@
 | 1 | "PyPI distribution은 `mini-omega-lock`" | README 배지, install 명령; EASY_READMEs | `pyproject.toml` `[project].name` | `python scripts/generate_readme_claims.py --check` | `generated` |
 | 2 | 패키지 버전 `0.5.0` | README PyPI 배지 | `pyproject.toml` `[project].version` + `mini_omega_lock.__version__` | `python scripts/check_repo_consistency.py` | `generated` |
 | 3 | Python ≥ 3.11 | README 배지 | `pyproject.toml` `[project].requires-python` | `python scripts/generate_readme_claims.py --check` | `generated` |
-| 4 | `omegaprompt>=1.1.0` 의존 | README parent 배지 | `pyproject.toml` `[project].dependencies` | `python scripts/check_repo_consistency.py` | `generated` |
+| 4 | 선택 bridge의 `omegaprompt>=1.1.0` 의존 | README parent 배지 | `pyproject.toml` `[project.optional-dependencies].bridge` | `python scripts/check_repo_consistency.py` | `generated` |
 | 5 | Public API 이름들 | README/EASY_READMEs code block | `src/mini_omega_lock/__init__.py::__all__` | `python scripts/check_repo_consistency.py` | `source-backed` |
 | 6 | MCP server 6개 도구 노출 | README, `mcp/__init__.py` docstring | `src/mini_omega_lock/mcp/server.py` `@mcp_app.tool()` decorator | `python scripts/generate_readme_claims.py --check` | `generated` |
 | 7 | MCP optional extra는 `mcp` | README, EASY_READMEs | `pyproject.toml` `[project.optional-dependencies]` | `python scripts/check_repo_consistency.py` | `generated` |

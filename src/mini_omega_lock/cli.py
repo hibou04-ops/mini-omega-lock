@@ -2,7 +2,7 @@
 # Copyright (c) 2026 Kyunghoon Gwak <hibouaile04@gmail.com>
 """``preflight`` command-line entry point for mini-omega-lock.
 
-Wraps :func:`mini_omega_lock.empirical_preflight` + omegaprompt's
+Wraps :func:`mini_omega_lock.empirical_preflight` + local adaptation's
 :func:`derive_adaptation_plan` so the preflight gate is reachable from a
 shell / CI without writing Python.
 
@@ -91,7 +91,7 @@ def _load_json_arg(value: str, *, what: str) -> Any:
 
 
 def _resolve_rubric(value: str):
-    from omegaprompt.domain.judge import JudgeRubric
+    from mini_omega_lock._vendor.domain.judge import JudgeRubric
 
     data = _load_json_arg(value, what="--rubric")
     if not isinstance(data, dict):
@@ -100,7 +100,7 @@ def _resolve_rubric(value: str):
 
 
 def _resolve_item(value: str):
-    from omegaprompt.domain.dataset import DatasetItem
+    from mini_omega_lock._vendor.domain.dataset import DatasetItem
 
     data = _load_json_arg(value, what="--probe-item")
     if not isinstance(data, dict):
@@ -109,8 +109,8 @@ def _resolve_item(value: str):
 
 
 def _build_judge(provider: str, model: str | None, base_url: str | None):
-    from omegaprompt.judges import LLMJudge
-    from omegaprompt.providers import make_provider
+    from mini_omega_lock._vendor.judges import LLMJudge
+    from mini_omega_lock._vendor.providers import make_provider
 
     provider_obj = make_provider(provider, model=model, base_url=base_url)
     return LLMJudge(provider=provider_obj)
@@ -187,14 +187,14 @@ def _required_measurements(args: argparse.Namespace) -> list[str]:
 
 def _run_preflight(args: argparse.Namespace) -> dict[str, Any]:
     """Execute the preflight + adaptation plan, returning a serializable dict."""
-    from omegaprompt.preflight import PreflightReport, derive_adaptation_plan
+    from mini_omega_lock._vendor.preflight import PreflightReport, derive_adaptation_plan
 
     from mini_omega_lock import empirical_preflight
 
     rubric = _resolve_rubric(args.rubric)
     probe_item = _resolve_item(args.probe_item)
-    judge = _build_judge(args.provider, args.model, args.base_url)
     token_counter = resolve_token_counter(args.token_counter)
+    judge = _build_judge(args.provider, args.model, args.base_url)
 
     fitness_samples: Sequence[float] | None = None
     if args.fitness_samples:

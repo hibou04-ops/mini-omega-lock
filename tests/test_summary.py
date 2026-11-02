@@ -47,7 +47,7 @@ def test_judge_noise_floor_clamps_out_of_range():
 
 
 def test_judge_noise_floor_accepts_pydantic_model():
-    from omegaprompt.preflight.contracts import JudgeQualityMeasurement
+    from mini_omega_lock._vendor.preflight.contracts import JudgeQualityMeasurement
 
     m = JudgeQualityMeasurement(
         consistency=0.75, anchoring_usage=0.0, scale_monotonic=False, samples=3
@@ -151,10 +151,10 @@ def test_scorecard_accepts_markdown_alias():
 
 
 def test_summary_from_real_empirical_preflight():
-    from omegaprompt.domain.dataset import DatasetItem
-    from omegaprompt.domain.judge import Dimension, HardGate, JudgeResult, JudgeRubric
-    from omegaprompt.judges.llm_judge import LLMJudge
-    from omegaprompt.providers.base import (
+    from mini_omega_lock._vendor.domain.dataset import DatasetItem
+    from mini_omega_lock._vendor.domain.judge import Dimension, HardGate, JudgeResult, JudgeRubric
+    from mini_omega_lock._vendor.judges.llm_judge import LLMJudge
+    from mini_omega_lock._vendor.providers.base import (
         CapabilityTier,
         ProviderCapabilities,
         ProviderResponse,

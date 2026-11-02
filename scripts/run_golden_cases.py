@@ -34,20 +34,20 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from omegaprompt.domain.dataset import DatasetItem
-from omegaprompt.domain.enums import (
+from mini_omega_lock._vendor.domain.dataset import DatasetItem
+from mini_omega_lock._vendor.domain.enums import (
     OutputBudgetBucket,
     ReasoningProfile,
     ResponseSchemaMode,
 )
-from omegaprompt.domain.judge import (
+from mini_omega_lock._vendor.domain.judge import (
     Dimension,
     HardGate,
     JudgeResult,
     JudgeRubric,
 )
-from omegaprompt.judges.llm_judge import LLMJudge
-from omegaprompt.providers.base import (
+from mini_omega_lock._vendor.judges.llm_judge import LLMJudge
+from mini_omega_lock._vendor.providers.base import (
     CapabilityTier,
     ProviderCapabilities,
     ProviderError,

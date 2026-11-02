@@ -47,8 +47,8 @@ def _run_cli_inprocess(argv, monkeypatch, scores=None):
     import io
     from contextlib import redirect_stdout
 
-    from omegaprompt.domain.judge import JudgeResult
-    from omegaprompt.providers.base import (
+    from mini_omega_lock._vendor.domain.judge import JudgeResult
+    from mini_omega_lock._vendor.providers.base import (
         CapabilityTier,
         ProviderCapabilities,
         ProviderResponse,
@@ -80,7 +80,7 @@ def _run_cli_inprocess(argv, monkeypatch, scores=None):
                 ship_grade_judge=True,
             )
 
-    monkeypatch.setattr("omegaprompt.providers.make_provider", lambda *a, **kw: _Scripted())
+    monkeypatch.setattr("mini_omega_lock._vendor.providers.make_provider", lambda *a, **kw: _Scripted())
     buf = io.StringIO()
     with redirect_stdout(buf):
         code = cli.main(argv)
@@ -376,10 +376,10 @@ def test_cli_does_not_rewrite_library_warning_strings():
     """The warnings the CLI surfaces must be byte-identical to the ones the
     library produces (no CLI-side rewriting). Compare the CLI's golden
     warnings against empirical_preflight's own output on the same inputs."""
-    from omegaprompt.domain.dataset import DatasetItem
-    from omegaprompt.domain.judge import Dimension, HardGate, JudgeRubric, JudgeResult
-    from omegaprompt.judges.llm_judge import LLMJudge
-    from omegaprompt.providers.base import (
+    from mini_omega_lock._vendor.domain.dataset import DatasetItem
+    from mini_omega_lock._vendor.domain.judge import Dimension, HardGate, JudgeRubric, JudgeResult
+    from mini_omega_lock._vendor.judges.llm_judge import LLMJudge
+    from mini_omega_lock._vendor.providers.base import (
         CapabilityTier,
         ProviderCapabilities,
         ProviderResponse,

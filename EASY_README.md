@@ -1,117 +1,79 @@
 # mini-omega-lock — Easy Start
 
-> The short version. Full doc: [README.md](README.md) · 한국어 Easy: [EASY_README_KR.md](EASY_README_KR.md)
+[English](README.md) · [한국어](README.ko.md) · [English easy](EASY_README.md) · [한국어 easy](EASY_README_KR.md)
+
+Empirical preflight for repeated judge variability and missing measurements before interpreting evaluation results. It does not replace independent hold-out evaluation or an A/B significance test.
+
+Repository: `hibou04-ops/mini-omega-lock` · PyPI: `mini-omega-lock` · import: `mini_omega_lock` · CLI: `preflight` · MCP: `mini-omega-lock-mcp` with `mini-omega-lock[mcp]`
+
+## 0.8.3 — Standalone installation and statistical naming
+
+The sole required dependency is `pydantic>=2.6.0`. Necessary contracts, provider boundaries and judge code are included under internal `_vendor`, allowing core imports, CLI and fake-provider demos without omegaprompt, omega-lock, NumPy or provider SDKs. SDKs load lazily when a live provider is selected. `omegaprompt>=1.1.0` is confined to optional extra `[bridge]`.
+
+Requires Python 3.11+. This checkout has source version **0.8.3**. The commands below install the checkout. Git tags and PyPI publication are separate; availability of the new source version on PyPI is not claimed.
 
 ```bash
-pip install mini-omega-lock
-```
-
-## v0.8.2 — Release changes
-
-Adds `mini_omega_lock.probes.compute_minimum_detectable_effect()`: `mean(abs(delta)) + z * population_sigma(abs(delta)) / sqrt(n)` with default `z=1.96`. A singleton returns its absolute delta; empty/nonfinite samples and invalid z are rejected. This helper uses supplied paired observations and does not establish a sampling design, statistical power, or live-judge quality by itself.
-
-Includes an MCP 1.x/2.x import-layout compatibility shim (`FastMCP` / `MCPServer`). Local verification used SDK 1.30.0; SDK 2.x runtime behavior is not verified, and the declared supported dependency remains `mcp>=1.0.0,<2.0.0`.
-
-## Start here · Standalone use · Integration/Docking
-
-**Omega Verification Suite** — Quiet precision. AI research guided by evidence.
-
-Probe judge consistency, schema behavior, context margin and run projections before a calibration. This is a separately distributed measurement tool.
-
-Requires Python 3.11+. Installation needs internet.
-
-```bash
-python -m pip install mini-omega-lock==0.8.2
+python -m pip install .
 preflight --help
-python -c "from mini_omega_lock import compute_context_margin; print(compute_context_margin(system_prompt_chars=0, rubric_chars=0, longest_input_chars=380, longest_reference_chars=0, longest_response_chars=0, context_window_tokens=1000))"
+python examples/demo_replay.py
+python examples/cli_demo_replay.py
 ```
 
-The offline API example prints 0.9: a character-based context projection, not an exact tokenizer measurement or model-quality result. Full preflight CLI probes require the selected provider infrastructure. Unmeasured warnings give exit 2; threshold breaches give 3; usage/runtime errors give 1. Exit 0 means requested measurements ran, not that their values are acceptable.
+The fixture demos above run without API keys, live SDKs or network access. Installation may download dependencies. Live probes separately require the selected SDK, provider configuration and credentials.
 
-omegaprompt>=1.1.0 is required and installed automatically; no calibration pipeline is needed to use the probes. This release was tested offline with omegaprompt 2.2.3. Pack judge_quality, endpoint, performance and warnings into PreflightReport, then derive_adaptation_plan. The package is not the omega-lock search engine.
-
-[Docking contracts and runnable data handoff](https://github.com/hibou04-ops/omega-lock/blob/main/DOCKING.md) · [Full guide](README.md).
-
-MCP: install the distribution with `[mcp]` and use its existing server executable. FastMCP support is bounded to MCP SDK `>=1.0.0,<2.0.0`; the tool names and schemas are unchanged.
-
-
-## The one-sentence pitch
-
-**Measure how repeated judge scores vary before interpreting evaluation results.** mini-omega-lock reports variability and measurement coverage.
-
-## What's the "noise floor"?
-
-An LLM judge doesn't score the *same* answer the *same* way every time. Grade one fixed answer five times → five slightly different scores. That wobble is the judge's **noise floor**.
-
-The repeated-item CV is relative variability. Aggregate-fitness standard deviation has fitness units. An A/B comparison needs paired observations, uncertainty, and a decision rule; this tool does not supply that test.
-
-## 30-second use
-
-```bash
-# No Python needed — one CI-friendly number:
-preflight --provider anthropic --rubric rubric.json \
-          --probe-item item.json --probe-response "4" --summary
-# -> {"judge_noise_floor": 0.07, "schema_reliability": 0.0, ...}
-```
+## compute_empirical_noise_ceiling
 
 ```python
-from mini_omega_lock import empirical_preflight, judge_noise_floor
-# ... build a judge + rubric + probe item (see README.md quick start) ...
-judge_quality, endpoint, performance, warnings = empirical_preflight(
-    judge=judge, rubric=rubric, probe_item=probe,
-    probe_response="4", consistency_repeats=5,
+from mini_omega_lock import (
+    compute_empirical_noise_ceiling,
+    compute_minimum_detectable_effect,
 )
-print(judge_noise_floor(judge_quality))   # e.g. 0.07
+
+assert compute_minimum_detectable_effect is compute_empirical_noise_ceiling
+assert compute_empirical_noise_ceiling([-0.1, 0.1]) == 0.1
 ```
 
-`judge_noise_floor` is clipped relative CV (`1 - consistency`), not an absolute A/B effect threshold. Default shared judge/gate measurement uses 5 actual observations; configured extra probes and provider pricing determine total cost.
+The canonical API is `compute_empirical_noise_ceiling(paired_deltas, confidence_z=1.96)`, exposed from both the package root and `mini_omega_lock.probes`. The legacy `compute_minimum_detectable_effect` name is a backward-compatible alias to the same callable in both modules.
 
-## It also checks (same pass)
+```text
+magnitudes = abs(paired_deltas)
+ceiling = mean(magnitudes) + 1.96 * pstdev(magnitudes) / sqrt(n)
+```
 
-| Check | What it tells you |
-|---|---|
-| **Judge noise floor** | The headline: how much the judge disagrees with itself. |
-| **Schema reliability** | Fraction of STRICT_SCHEMA calls that parse, including silent parse failures. JSON fallback is an advisory recommendation; runtime does not automatically apply it. |
-| **Context budget margin** | How close your biggest call is to the context limit. Negative = overflow. |
-| **Wall-time projection** | How long a full run will take, before you start it. |
+Default `confidence_z` is 1.96 and may be changed to a finite nonnegative value. `pstdev` is population standard deviation with denominator n. Empty samples, NaN/Inf observations and negative/nonfinite z are rejected; a singleton returns its absolute delta. This statistic is an empirical absolute-noise ceiling for the supplied repeated observations. It does not establish a sampling design, power, a distribution-free confidence interval or an A/B minimum detectable effect.
 
-Unmeasured numeric fields use fail-closed defaults. Read `warnings.measurement_status` first and preserve `probe_accounting`; warning-string inference is a legacy fallback, not proof of historical measurement coverage.
+## Measurement states and accounting
 
-## Works with omegaprompt — or alone
+`empirical_preflight()` returns `(judge_quality, endpoint, performance, warnings)`. Use local contracts from `mini_omega_lock.contracts`, providers from `mini_omega_lock.providers` and the judge from `mini_omega_lock.judges`.
 
-- **Alone:** the noise-floor + schema-reliability numbers are useful on their own. Run `preflight`, gate your CI on the result.
-- **With [omegaprompt](https://pypi.org/project/omegaprompt/):** the records it emits feed omegaprompt's `derive_adaptation_plan`, which auto-tunes calibration thresholds to your infra. mini-omega-lock is the probe; omegaprompt is the engine it feeds. (Installing this pulls omegaprompt in — it's a hard dependency.)
+Read `warnings.measurement_status` first and persist `probe_accounting`. States are `measured`, `unmeasured`, `insufficient_samples`, `failed`, `estimated`, `not_applicable`. The existing 4-tuple and warnings-list behavior remain. Human warnings are diagnostics; legacy substring fallback without structured states does not verify historical measurement coverage.
 
-## CLI extras for CI
+`judge_noise_floor` is clipped CV (`1 - consistency`); `judge_relative_variability` aliases the same value. `fitness_noise_floor` is the standard deviation of aggregate fitness. Relative CV cannot be compared directly with an absolute A/B score delta. Consistency and gate-flip share observations for the same `(rubric,item,response)`, with each metric using its requested prefix. The default batch uses 5 actual observations; additional probes add calls.
+
+Accounting includes failed-call time separately from successful-call latency projection. Unobservable provider-internal retries and failed-token costs remain unknown/null. Suggested schema fallback is advisory and does not prove runtime consumption.
+
+## CLI and optional integration
+
+CLI exit codes: 0 means requested measurements completed; 2 indicates unmeasured, failed, insufficient or estimated states; 3 indicates a user threshold breach on a measured value; 1 indicates input/runtime errors. Exit 0 without thresholds is not judge-quality acceptance or deployment authorization.
 
 ```bash
-preflight ... --scorecard html --scorecard-out preflight.html   # a PR artifact
-preflight ... --fail-over-noise-floor 0.10                       # fail the build if too noisy
-preflight ... --fail-under-schema-reliability 0.90              # fail if endpoint flaky
+# Live example: requires the selected provider SDK and credentials.
+preflight --provider anthropic --rubric rubric.json \
+  --probe-item item.json --probe-response "4" --summary
+
+python -m pip install ".[mcp]"
+mini-omega-lock-mcp
 ```
 
-Exit codes: `0` good · `2` something couldn't be measured · `3` a value breached a `--fail-*` bound · `1` usage error.
+Supported MCP SDK range is `>=1.0.0,<2.0.0`; 2.x runtime behavior is unverified. Install `[bridge]` for parent integration. Local `PreflightReport` and adaptation work without the parent. Convert reports with `mini_omega_lock.bridge.to_omegaprompt_report(report)`; wrap an existing parent provider with `adapt_omegaprompt_provider(provider)` before passing it to the local `LLMJudge`. Model classes are not assumed to share identity.
 
-## When to skip it
+## Evidence and documentation
 
-- Stock frontier providers on known-stable tiers — defaults are fine.
-- Rapid iteration (it adds ~10s per run).
-- Tests / CI with no API access (omegaprompt runs fine on declared defaults).
+- Generated claims: [English](docs/generated/claims.md) / [한국어](docs/generated/claims_kr.md)
+- [Trust model](docs/trust_model.md) · [Claim ledger](docs/claim_ledger.md)
+- [Vendored source and maintenance](VENDORED.md) · [Changelog](CHANGELOG.md)
+- [0.8.0 measurement-contract migration](docs/upgrade-0.8.0.md)
 
-## Go deeper
+[README.ko.md](README.ko.md) is the canonical Korean document; [README_KR.md](README_KR.md) is an identical compatibility copy.
 
-- Full README: [README.md](README.md)
-- Contract definitions: `omegaprompt.preflight.contracts`
-- Analytical, zero-API sibling: [mini-antemortem-cli](https://pypi.org/project/mini-antemortem-cli/)
-
-License: Apache 2.0. Copyright (c) 2026 Kyunghoon Gwak.
-
-## 0.8.0: 실제 관측 공유와 측정 상태
-
-- 같은 `(rubric, item, response)`의 consistency와 gate flip은 실제 judge 관측 배치를 공유합니다. 기본 3+5회가 5회로 줄며 각 지표는 요청한 3개·5개 prefix만 사용합니다. 독립 표본 수를 합산하지 않습니다. 호출 순서가 바뀌므로 stateful judge의 수치가 달라질 수 있습니다.
-- 기존 4-tuple과 warnings list 동작을 유지합니다. 반환 warnings의 `measurement_status`와 `probe_accounting`을 함께 저장하세요. CLI/MCP JSON도 두 필드를 제공합니다. 요약은 상태를 우선 읽고 구형 일반 list에는 경고 문자열 호환 읽기를 사용합니다.
-- 상태는 `measured`, `unmeasured`, `insufficient_samples`, `failed`, `estimated`, `not_applicable`입니다. 1회 채점은 변동 측정에 부족합니다. 실패한 호출 시간도 accounting에 포함하고, 성공 호출 latency projection과 구분합니다. provider 내부 재시도·실패 토큰 비용은 관측할 수 없으면 `null`/unknown으로 남깁니다.
-- `judge_noise_floor`는 호환 이름이며 값은 clipped CV입니다. 새 별칭 `judge_relative_variability`도 같은 값입니다. `fitness_noise_floor`는 aggregate fitness의 표준편차입니다. 둘 다 임의 A/B 개선의 유의성을 판정하지 않습니다.
-- CLI: 정상 실행 0은 지정된 측정 완료를 뜻합니다. 미측정·실패·표본 부족·추정은 2, **측정한** 값의 사용자 threshold 위반은 3, 잘못된 입력은 1입니다. threshold 없는 성공을 judge 품질 통과로 해석하지 마세요.
-
-[전후 근거·호환성·재현 명령](docs/upgrade-0.8.0.md). 유료 provider 검증은 수행하지 않았습니다.
+Apache 2.0. [LICENSE](LICENSE) · [NOTICE](NOTICE).

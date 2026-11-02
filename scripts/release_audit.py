@@ -91,11 +91,11 @@ def _check_no_release_markers() -> list[str]:
     tag = f"v{version}"
 
     # 1. Local git tag. This is a PRE-TAG safety: locally (and in ci.yml's
-    #    push/PR checkout, which fetches no tags) the version's tag must not yet
-    #    exist. The trusted-publishing publish workflow, however, checks out AT
-    #    the tag (so the tag necessarily exists) and gates on this same audit via
-    #    publish_readiness.py — there the check is inverted and must be skipped.
-    #    MINI_OMEGA_LOCK_RELEASE_WORKFLOW is set only by that workflow.
+    #    push/PR checkout) the version's tag must not yet exist. Tag CI first
+    #    validates metadata/runtime versions and resolves the actual tag to HEAD
+    #    in ci_release_audit.py. Only that verified child audit and the trusted
+    #    publishing step use MINI_OMEGA_LOCK_RELEASE_WORKFLOW for this marker
+    #    check; all mechanical checks and other marker scans still run.
     if not os.environ.get("MINI_OMEGA_LOCK_RELEASE_WORKFLOW"):
         result = subprocess.run(
             ["git", "tag", "-l", tag],

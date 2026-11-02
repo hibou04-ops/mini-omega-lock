@@ -6,11 +6,13 @@
 
 Repository: `hibou04-ops/mini-omega-lock` · PyPI: `mini-omega-lock` · import: `mini_omega_lock` · CLI: `preflight` · MCP: `mini-omega-lock-mcp` with `mini-omega-lock[mcp]`
 
-## 0.8.4 — 선택 bridge 계약 회귀 검증
+## 0.8.5 — 태그 일치 검증을 거치는 CI 감사
 
 기본 필수 의존성은 `pydantic>=2.6.0` 하나입니다. 필요한 계약·provider 경계·judge 코드를 내부 `_vendor` namespace에 포함해 `omegaprompt`, `omega-lock`, NumPy, provider SDK 없이 core import·CLI·fake-provider 데모가 동작합니다. SDK는 live provider를 선택할 때 지연 import합니다. `omegaprompt>=1.1.0`은 선택 extra `[bridge]`에만 있습니다.
 
-Python 3.11+가 필요합니다. 이 checkout의 소스 버전은 **0.8.4**입니다. 아래 명령은 checkout을 설치합니다. 이전 [0.8.3은 PyPI에 게시되었습니다](https://pypi.org/project/mini-omega-lock/0.8.3/). 이 문서는 0.8.4 소스 변경을 설명하며 새 버전의 PyPI 게시를 선주장하지 않습니다.
+Python 3.11+가 필요합니다. 이 checkout의 소스 버전은 **0.8.5**입니다. 아래 명령은 checkout을 설치합니다. 이전 [0.8.4는 PyPI에 게시되었습니다](https://pypi.org/project/mini-omega-lock/0.8.4/). 버전별 [0.8.5 PyPI 파일](https://pypi.org/project/mini-omega-lock/0.8.5/)과 [Actions](https://github.com/hibou04-ops/mini-omega-lock/actions)는 별도로 확인하세요. 소스 메타데이터만으로 게시 완료를 입증하지 않습니다.
+
+태그 CI에서는 `scripts/ci_release_audit.py`가 패키지/런타임 버전 일치와 실제 Git 태그가 checkout된 HEAD를 가리키는지 확인한 뒤 audit 자식 프로세스에만 release-mode 플래그를 설정합니다. Main과 pull-request CI는 기존 pre-tag 방어를 유지하며 모든 감사 단계와 나머지 release-marker 검사도 그대로 실행합니다.
 
 ```bash
 python -m pip install .

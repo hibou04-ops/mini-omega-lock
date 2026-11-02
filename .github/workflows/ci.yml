@@ -50,7 +50,7 @@ jobs:
       - name: Fixture integrity
         run: python scripts/verify_fixture_integrity.py
       - name: Release audit (no network)
-        run: python scripts/release_audit.py --no-network
+        run: python scripts/ci_release_audit.py --no-network
 
   build:
     name: wheel build + smoke (${{ matrix.os }})

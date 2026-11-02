@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.5] - 2026-11-03
+
+- Fix tag CI audit context: require package/runtime version agreement and resolve the actual version tag to the checked-out HEAD before allowing the existing release-mode audit path.
+- Scope the release-mode flag to the audit child only; main and pull-request runs retain the pre-tag marker guard, and every mechanical audit step remains enabled.
+- Add real temporary-Git regressions for matching lightweight/annotated tags, mismatched commits and metadata, and pre-tag behavior.
+- Synchronize current source-version documentation and generated claims; retain the published 0.8.4 tag and artifacts.
+
 ## [0.8.4] - 2026-11-02
 
 - Add optional real-omegaprompt integration tests for vendored model schemas, JSON roundtrips, Enum values and validation errors.

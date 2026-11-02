@@ -131,7 +131,9 @@ For `scripts/release_audit.py --no-network`, "release performed" — which must 
   - the previously-committed file fingerprints (`dist/` is allowed to contain the artifacts the previous release built).
 - A file at `RELEASE_DRAFT.md` containing the literal string `STATUS: PUBLISHED`.
 
-If any of these are present, the audit exits non-zero. The audit never *creates* these markers — it only checks for them.
+These are pre-tag checks. Main and pull-request CI keep the tag-absence guard. Tag CI invokes `scripts/ci_release_audit.py --no-network`, which first checks matching package/runtime versions and resolves the actual `v<version>` Git tag to the checked-out HEAD. Only after those checks does it set `MINI_OMEGA_LOCK_RELEASE_WORKFLOW=1` for the audit child, allowing the already-verified tag while retaining every mechanical step and the other marker scans. The publishing workflow retains its separate tag/version check and step-scoped release-mode flag.
+
+Outside that verified tag context or the publishing step, any of these markers makes the audit exit non-zero. The audit never *creates* these markers — it only checks for them.
 
 ## Post-release
 

@@ -30,7 +30,7 @@
 - **Analytical preflight가 아님.** Config의 deterministic rule classification은 `mini-antemortem-cli`. `mini-omega-lock`은 *empirical* probe만 — config를 e.g. "trap: ambiguous rubric"으로 classify하지 않음.
 - **General agent framework가 아님.** 여기서 노출하는 MCP server는 empirical preflight probe와 1:1로 매핑된 6개 도구. Chat, planning, RAG, non-preflight surface 일체 제공 안 함.
 - **Benchmark가 아님.** 어떤 모델도 ranking되지 않고, leaderboard도 없고, provider 간 aggregate 점수도 주장 안 함.
-- **Dashboard나 SaaS가 아님.** 패키지는 Python 객체와 (선택적) MCP 응답을 emit. Hosted UI 없음.
+- **로컬 Python library.** 패키지는 Python 객체와 (선택적) MCP 응답을 emit. Hosted UI 없음.
 - **End-user용 CLI가 아님.** 유일한 console script는 MCP server(`mini-omega-lock-mcp`). `mini-omega-lock` user-facing CLI는 없음 — Python이나 MCP로 소비. `scripts/*.py`는 repo 유지보수용 script이지 user tool이 아님.
 
 ## 올바른 도구 선택

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.6 - 2026-11-03
+
+- Clarify public documentation and examples for general AI/ML verification and software quality engineering.
+- Preserve the verification contracts, SDK interfaces and license notices.
+
 ## [0.8.5] - 2026-11-03
 
 - Fix tag CI audit context: require package/runtime version agreement and resolve the actual version tag to the checked-out HEAD before allowing the existing release-mode audit path.

@@ -30,7 +30,7 @@ Both emit `omegaprompt.preflight.contracts.PreflightReport`-compatible records. 
 - **Not the analytical preflight.** Use `mini-antemortem-cli` for deterministic, no-API rule classification of configs. `mini-omega-lock` does *empirical* probes; it does not classify a configuration as e.g. "trap: ambiguous rubric".
 - **Not a general agent framework.** The MCP server here exposes six tools backed 1:1 by the empirical-preflight probes. It does not provide chat, planning, RAG, or any non-preflight surface.
 - **Not a benchmark.** No model is ranked, no leaderboard is published, no aggregate score across providers is claimed.
-- **Not a dashboard or SaaS.** The package emits Python objects and (optionally) MCP responses. There is no hosted UI.
+- **Local Python library.** The package emits Python objects and (optionally) MCP responses. There is no hosted UI.
 - **Not a CLI for end users.** The only console script is the MCP server (`mini-omega-lock-mcp`). There is no `mini-omega-lock` user-facing CLI; the package is consumed from Python or via MCP. The `scripts/*.py` files are repo-maintenance scripts, not user tools.
 
 ## Choosing the right tool

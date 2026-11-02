@@ -12,7 +12,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "0.8.5"
+VERSION = "0.8.6"
 TAG = "v" + VERSION
 FLAG = "MINI_OMEGA_LOCK_RELEASE_WORKFLOW"
 
@@ -128,9 +128,9 @@ def test_a_tag_resolving_to_a_blob_cannot_grant_release_mode(git_repo):
 
 @pytest.mark.parametrize("runtime_source", [
     '__version__ = "0.8.4"\n',
-    '__version__ = str("0.8.5")\n',
-    '__version__ = "0.8.5"\n__version__ = "0.8.5"\n',
-    'def ignored():\n    __version__ = "0.8.5"\n',
+    '__version__ = str("0.8.6")\n',
+    '__version__ = "0.8.6"\n__version__ = "0.8.6"\n',
+    'def ignored():\n    __version__ = "0.8.6"\n',
 ])
 def test_runtime_version_must_be_one_matching_top_level_literal(git_repo, runtime_source):
     _git(git_repo, "tag", TAG)

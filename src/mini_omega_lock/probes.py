@@ -755,7 +755,7 @@ def empirical_preflight(
     # version made one extra call AND swallowed its exception, then
     # appended the failure latency to the sample list; that double-
     # billed the user and could put failed-call elapsed times into the
-    # mean. Now we rely on the work we already paid for, and item #6
+    # mean. Now we rely on the work we already completed, and item #6
     # of the audit review further separates success vs failure: only
     # successful probe latency reaches ``probe_latencies_ms``. If the
     # consistency probe failed, ``avg_call_latency_ms`` is 0 and the

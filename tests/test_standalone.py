@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import ast
 import subprocess
 import sys
 import tomllib
@@ -10,6 +11,16 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_source_has_no_direct_parent_imports_and_tests_do_not_import_examples():
+    for directory, forbidden in [(ROOT / "src", "omegaprompt"), (ROOT / "tests", "examples")]:
+        for path in directory.rglob("*.py"):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                names = ([alias.name for alias in node.names] if isinstance(node, ast.Import)
+                         else [node.module or ""] if isinstance(node, ast.ImportFrom) else [])
+                assert not any(name.split(".")[0] == forbidden for name in names), (path, node.lineno)
 
 
 def test_runtime_dependencies_exclude_parent_and_bridge_is_explicit():

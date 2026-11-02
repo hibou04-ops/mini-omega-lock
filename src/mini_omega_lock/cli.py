@@ -42,6 +42,8 @@ louder failure than an unmeasured field.
 
 from __future__ import annotations
 
+from mini_omega_lock._console import write_console
+
 import argparse
 import json
 import sys
@@ -477,11 +479,6 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    if hasattr(sys.stdout, "reconfigure"):
-        # Warning strings contain em-dashes; force UTF-8 so Windows cp949
-        # stdout doesn't crash on them.
-        sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
-
     parser = build_parser()
     args = parser.parse_args(argv)
 
@@ -496,14 +493,14 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError("--fail-under-context-margin must be finite")
         result = _run_preflight(args)
     except ValueError as exc:
-        print(f"preflight: input error: {exc}", file=sys.stderr)
+        write_console(f"preflight: input error: {exc}\n", stream=sys.stderr)
         return EXIT_USAGE
     except RuntimeError as exc:
         # resolve_token_counter fail-loud lands here.
-        print(f"preflight: {exc}", file=sys.stderr)
+        write_console(f"preflight: {exc}\n", stream=sys.stderr)
         return EXIT_USAGE
     except Exception as exc:  # provider / runtime failure
-        print(f"preflight: runtime error: {type(exc).__name__}: {exc}", file=sys.stderr)
+        write_console(f"preflight: runtime error: {type(exc).__name__}: {exc}\n", stream=sys.stderr)
         return EXIT_USAGE
 
     # Scorecard output is a separate axis from the --text/--json/... format
@@ -515,11 +512,11 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 Path(args.scorecard_out).write_text(rendered, encoding="utf-8")
             except OSError as exc:
-                print(f"preflight: could not write scorecard: {exc}", file=sys.stderr)
+                write_console(f"preflight: could not write scorecard: {exc}\n", stream=sys.stderr)
                 return EXIT_USAGE
-            print(f"preflight: wrote scorecard to {args.scorecard_out}")
+            write_console(f"preflight: wrote scorecard to {args.scorecard_out}\n")
         else:
-            sys.stdout.write(rendered)
+            write_console(rendered)
     else:
         renderers = {
             "text": _render_text,
@@ -527,14 +524,16 @@ def main(argv: list[str] | None = None) -> int:
             "jsonl": _render_jsonl,
             "summary": _render_summary,
         }
-        sys.stdout.write(renderers[args.format](result))
+        write_console(renderers[args.format](result),
+                      structured="jsonl" if args.format == "jsonl" else
+                      "json" if args.format in {"json", "summary"} else None)
 
     # Exit-code precedence: a CI threshold breach (measured-but-out-of-bound)
     # is louder than a fail-closed unmeasured field, which is louder than OK.
     breaches = _threshold_breaches(result["summary"], args)
     if breaches:
         for b in breaches:
-            print(f"preflight: threshold breach: {b}", file=sys.stderr)
+            write_console(f"preflight: threshold breach: {b}\n", stream=sys.stderr)
         return EXIT_THRESHOLD
 
     statuses = result.get("measurement_status", {})

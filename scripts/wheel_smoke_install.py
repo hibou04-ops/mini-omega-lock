@@ -9,12 +9,12 @@ Run::
 
     python scripts/wheel_smoke_install.py dist/mini_omega_lock-0.5.0-py3-none-any.whl
 
-The venv lives under ``tmp/wheel_smoke/`` and is removed on exit
-regardless of pass/fail.
+The fresh venv lives in the system temporary directory, outside the checkout,
+and is removed on exit regardless of pass/fail. Imports run from that directory.
 
 Cross-platform: detects Windows (``Scripts/python.exe``) vs POSIX
-(``bin/python``). Does NOT install optional extras — those would
-require either a private PyPI index or live network access.
+(``bin/python``). Only declared runtime dependencies are installed; this step
+may download them. No optional extras or parent engine are installed.
 """
 
 from __future__ import annotations
@@ -42,17 +42,26 @@ def _venv_python(venv_dir: Path) -> Path:
 def _smoke_test(python: Path, wheel_path: Path, name: str) -> int:
     """Verify the wheel imports cleanly and every name in ``__all__`` resolves."""
     script = (
-        "import sys, importlib;"
+        "import sys, importlib, importlib.util; from pathlib import Path;"
         f"m = importlib.import_module({name!r});"
+        "assert Path(m.__file__).resolve().is_relative_to(Path(sys.prefix).resolve());"
+        "assert all(importlib.util.find_spec(n) is None for n in "
+        "('omegaprompt', 'omega_lock', 'numpy', 'openai', 'anthropic'));"
         "missing = [n for n in m.__all__ if not hasattr(m, n)];"
         "print('version:', getattr(m, '__version__', 'n/a'));"
         "print('all:', sorted(m.__all__));"
         "sys.exit(1 if missing else 0)"
     )
+    environment = os.environ.copy()
+    environment.pop("PYTHONPATH", None)
+    environment["PYTHONUTF8"] = "1"
     result = subprocess.run(
         [str(python), "-c", script],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        cwd=python.parent.parent,
+        env=environment,
     )
     sys.stdout.write(result.stdout)
     if result.returncode != 0:
@@ -89,19 +98,13 @@ def main(argv: list[str] | None = None) -> int:
             print(f"venv python not found: {python}", file=sys.stderr)
             return 1
 
-        # Upgrade pip silently to avoid surprises from old wheels.
-        print("[step] upgrading pip")
-        subprocess.run(
-            [str(python), "-m", "pip", "install", "--upgrade", "pip"],
-            check=False,
-            capture_output=True,
-        )
-
         print(f"[step] installing wheel: {wheel_path.name}")
         install = subprocess.run(
-            [str(python), "-m", "pip", "install", str(wheel_path)],
+            [str(python), "-m", "pip", "install", "--disable-pip-version-check", str(wheel_path)],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            cwd=venv_dir,
         )
         if install.returncode != 0:
             sys.stdout.write(install.stdout)
@@ -113,6 +116,19 @@ def main(argv: list[str] | None = None) -> int:
         if rc != 0:
             print("wheel smoke FAILED", file=sys.stderr)
             return rc
+        if args.module == "mini_omega_lock":
+            cli = python.parent / ("preflight.exe" if os.name == "nt" else "preflight")
+            cp949_environment = os.environ.copy()
+            cp949_environment.pop("PYTHONPATH", None)
+            cp949_environment.update(PYTHONUTF8="0", PYTHONIOENCODING="cp949")
+            help_result = subprocess.run(
+                [str(cli), "--help"], cwd=venv_dir, capture_output=True,
+                env=cp949_environment,
+            )
+            if help_result.returncode != 0:
+                print("installed console help failed under cp949", file=sys.stderr)
+                return 1
+            help_result.stdout.decode("ascii")
         print("wheel smoke OK")
         return 0
     finally:

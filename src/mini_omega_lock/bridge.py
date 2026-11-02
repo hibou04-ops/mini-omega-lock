@@ -7,6 +7,7 @@ these converters when exchanging Pydantic records or provider instances.
 
 from __future__ import annotations
 
+import importlib
 from typing import Any
 
 from pydantic import BaseModel
@@ -22,7 +23,7 @@ from mini_omega_lock._vendor.providers.base import (
 def to_omegaprompt_report(report: BaseModel | dict[str, Any]):
     """Convert a local report to the parent's report using JSON-compatible data."""
     try:
-        from omegaprompt.preflight import PreflightReport
+        PreflightReport = importlib.import_module("omegaprompt.preflight").PreflightReport
     except ModuleNotFoundError as exc:
         if exc.name != "omegaprompt":
             raise
@@ -41,8 +42,9 @@ def adapt_omegaprompt_provider(provider: Any):
     identities even when their JSON contracts match.
     """
     try:
-        from omegaprompt.providers.base import ProviderError as ParentProviderError
-        from omegaprompt.providers.base import ProviderRequest as ParentProviderRequest
+        parent_types = importlib.import_module("omegaprompt.providers.base")
+        ParentProviderError = parent_types.ProviderError
+        ParentProviderRequest = parent_types.ProviderRequest
     except ModuleNotFoundError as exc:
         if exc.name != "omegaprompt":
             raise

@@ -80,7 +80,7 @@ jobs:
           matches = sorted(glob.glob('dist/*.whl'))
           if not matches:
               raise SystemExit('no wheel produced under dist/')
-          with open(os.environ['GITHUB_OUTPUT'], 'a') as fh:
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as fh:
               fh.write(f'wheel={matches[-1]}\n')
       - name: Wheel smoke install
         run: python scripts/wheel_smoke_install.py "${{ steps.locate.outputs.wheel }}"

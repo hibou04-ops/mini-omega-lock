@@ -7,6 +7,32 @@
 [![CI](https://github.com/hibou04-ops/mini-omega-lock/actions/workflows/ci.yml/badge.svg)](https://github.com/hibou04-ops/mini-omega-lock/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/mini-omega-lock.svg)](https://pypi.org/project/mini-omega-lock/)
 
+<!-- QUICKSTART_DEMO_START -->
+## 10초 시작: 설치와 오프라인 게이트 결과
+
+```bash
+pip install mini-omega-lock
+uvx --from mini-omega-lock preflight --help
+```
+
+실행 명령은 `preflight`입니다. 리플레이는 입력 거절과 경험적 절대 노이즈 상한 계산을 확인하며 A/B 유의성 검정이 아닙니다.
+
+설치 후 이 저장소를 복제한 디렉터리에서 아래 데모를 실행합니다. diff 블록은 데모가 출력하는 실제 stdout입니다.
+
+```bash
+git clone https://github.com/hibou04-ops/mini-omega-lock.git
+cd mini-omega-lock
+python examples/quickstart_demo.py
+```
+
+```diff
+- [BLOCKED] empty_observations: ValueError
+- [BLOCKED] nonfinite_observation: ValueError
++ [PASS] finite_observations: empirical_noise_ceiling=0.1
+```
+<!-- QUICKSTART_DEMO_END -->
+
+
 Repository: `hibou04-ops/mini-omega-lock` · PyPI: `mini-omega-lock` · import: `mini_omega_lock` · CLI: `preflight` · MCP: `mini-omega-lock-mcp` with `mini-omega-lock[mcp]`
 
 ## 0.8.6 — 태그 일치 검증을 거치는 CI 감사

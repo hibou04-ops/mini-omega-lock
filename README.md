@@ -7,6 +7,32 @@ Empirical preflight for repeated judge variability and missing measurements befo
 [![CI](https://github.com/hibou04-ops/mini-omega-lock/actions/workflows/ci.yml/badge.svg)](https://github.com/hibou04-ops/mini-omega-lock/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/mini-omega-lock.svg)](https://pypi.org/project/mini-omega-lock/)
 
+<!-- QUICKSTART_DEMO_START -->
+## 10-second start: install and inspect an offline gate
+
+```bash
+pip install mini-omega-lock
+uvx --from mini-omega-lock preflight --help
+```
+
+The executable is `preflight`. The replay validates input rejection and an empirical absolute-noise ceiling; it is not an A/B significance test.
+
+After installation, run the demo from a clone of this repository. The diff block is the demo's actual stdout.
+
+```bash
+git clone https://github.com/hibou04-ops/mini-omega-lock.git
+cd mini-omega-lock
+python examples/quickstart_demo.py
+```
+
+```diff
+- [BLOCKED] empty_observations: ValueError
+- [BLOCKED] nonfinite_observation: ValueError
++ [PASS] finite_observations: empirical_noise_ceiling=0.1
+```
+<!-- QUICKSTART_DEMO_END -->
+
+
 Repository: `hibou04-ops/mini-omega-lock` · PyPI: `mini-omega-lock` · import: `mini_omega_lock` · CLI: `preflight` · MCP: `mini-omega-lock-mcp` with `mini-omega-lock[mcp]`
 
 ## 0.8.6 — Verified tag-context CI audit

@@ -34,7 +34,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev,mcp,bridge]"
-          python -m pip install --no-cache-dir "omegaprompt @ https://files.pythonhosted.org/packages/8e/f4/1410df607cc743ecac16ed23c55261c029bca8ba984d507d4218f5972468/omegaprompt-2.2.7-py3-none-any.whl#sha256=cae8820a3da5c3e41fe38427530f940a764ba9bc7c1e89b02c7901f86d3c2541"
+          python -m pip install --no-cache-dir "omegaprompt @ https://files.pythonhosted.org/packages/54/9d/6c033513387568d02393e8cf062639659670c4ffedc959125eda71a0778c/omegaprompt-2.2.8-py3-none-any.whl#sha256=9fab54398337cff17c24a302ea26c0da439e93c06af24cfb36ae026dde93ba90"
       - name: Run pytest
         run: python -m pytest -q
       - name: Generated claims drift

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.7 - 2026-11-06
+
+- Align the packaged description and release surfaces with the reviewed, domain-neutral documentation.
+- Preserve public APIs, probe behavior and frozen fixtures. This patch adds no performance or generalization evidence.
+
 ## 0.8.6 - 2026-11-03
 
 - Clarify public documentation and examples for general AI/ML verification and software quality engineering.

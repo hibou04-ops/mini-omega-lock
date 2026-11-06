@@ -35,11 +35,15 @@ python examples/quickstart_demo.py
 
 Repository: `hibou04-ops/mini-omega-lock` · PyPI: `mini-omega-lock` · import: `mini_omega_lock` · CLI: `preflight` · MCP: `mini-omega-lock-mcp` with `mini-omega-lock[mcp]`
 
+## 0.8.7 — Documentation and package metadata
+
+This documentation and packaging patch aligns the package description with the reviewed, domain-neutral source documentation. Public APIs, probe behavior and frozen fixtures are unchanged. It adds no new performance or generalization evidence.
+
 ## 0.8.6 — Verified tag-context CI audit
 
 The sole required dependency is `pydantic>=2.6.0`. Necessary contracts, provider boundaries and judge code are included under internal `_vendor`, allowing core imports, CLI and fake-provider demos without omegaprompt, omega-lock, NumPy or provider SDKs. SDKs load lazily when a live provider is selected. `omegaprompt>=1.1.0` is confined to optional extra `[bridge]`.
 
-Requires Python 3.11+. This checkout has source version **0.8.6**. The commands below install the checkout. The previous [0.8.4 is published on PyPI](https://pypi.org/project/mini-omega-lock/0.8.4/). Check version-specific [0.8.6 PyPI files](https://pypi.org/project/mini-omega-lock/0.8.6/) and [Actions](https://github.com/hibou04-ops/mini-omega-lock/actions) separately; source metadata alone does not establish publication.
+Requires Python 3.11+. This checkout has source version **0.8.7**. The commands below install the checkout. The previous [0.8.4 is published on PyPI](https://pypi.org/project/mini-omega-lock/0.8.4/). Check version-specific [0.8.7 PyPI files](https://pypi.org/project/mini-omega-lock/0.8.7/) and [Actions](https://github.com/hibou04-ops/mini-omega-lock/actions) separately; source metadata alone does not establish publication.
 
 On tag CI, `scripts/ci_release_audit.py` requires matching package/runtime versions and resolves the actual Git tag to the checked-out HEAD before setting the release-mode flag for the audit child only. Main and pull-request CI retain the pre-tag guard. Every audit step and the other release-marker checks still run.
 
